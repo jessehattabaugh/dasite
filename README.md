@@ -1,95 +1,23 @@
-# 🚀 Project Name
+# DaSite
 
-<!--
-INSTRUCTIONS: Replace this section with a brief description of your project.
-Delete these instructions and provide:
-1. A concise explanation of what your project does
-2. Why it's useful or important
-3. A compelling hook to interest potential users
--->
+The website testing tool that vibes with your development process.
 
-## 📋 Overview
+## Purpose
 
-<!--
-INSTRUCTIONS: Replace this section with details about your project.
-Include information such as:
-- The problem it solves
-- Key features and benefits
-- Target audience
-- Any unique selling points
--->
+You know you wanna test the site; it's the first thing you want to do after every feature you implement. You want to know that the site works, and how well. You want to know if the site looks different than it did and how much, and where. You want to make sure that core page speed metrics are getting better, not worse over time. You want to make sure the site stays accessibile. You want to watch your site grow from a single page, you many with an album of screenshots along the way.You want all that to happen as fast as possible so you can push your changes and get on with the next feature. In fact, sometimes you just want to test one page at a time, or a glob of pages. You want it tested with a real browser, chrome, firefox, and webkit, and you want it tested at different screen resolutions. You don't have time to mess around with complex configuration, or writing bespoke test specs.
 
-## 🎯 Project Goals
-
-<!--
-INSTRUCTIONS: Outline the main goals and objectives of the project.
-For example:
--->
-
-- Provide a seamless user experience across all devices
-- Ensure high performance and accessibility
-- Create a modular, maintainable codebase
-- Support offline functionality
-
-## 🛣️ Development Roadmap
-
-### Milestone 1: Foundation
-- [x] Project setup
-- [x] Core functionality implementation
-- [x] Basic testing framework
-
-### Milestone 2: Enhanced Features
-- [ ] Implement advanced user interactions
-- [ ] Add responsive design improvements
-- [ ] Optimize performance
-
-### Milestone 3: Expansion
-- [ ] Add internationalization support
-- [ ] Implement additional plugins
-- [ ] Create comprehensive documentation
-
-## 🚀 Getting Started
-
-### Quick Start
-
-<!--
-INSTRUCTIONS: Provide simple instructions for users to get started quickly.
-Keep this section brief and non-technical.
--->
+DaSite does all of this right from the command line.
 
 ```bash
-# Clone the repository
-git clone https://github.com/username/project-name.git
-
-# Navigate to the project directory
-cd project-name
-
-# Install dependencies
-npm install
-
-# Start the development server
-npm start
+npx dasite http://dasite.github.io
 ```
 
-## 📝 Documentation
+## Roadmap
 
-For more detailed information, please refer to:
-
-- [Contributing Guide](CONTRIBUTING.md) - Information for developers and contributors
-- [Change Log](CHANGELOG.md) - Version history and changes
-
-## 👥 Contributors
-
-<!--
-INSTRUCTIONS: Acknowledge the people who have contributed to the project.
-You can use GitHub's automatic contributors list or manually list key contributors.
--->
-
-## 📄 License
-
-<!--
-INSTRUCTIONS: Specify the license under which your project is released.
-For example:
--->
-
-This project is licensed under the [MIT License](LICENSE).
+1. **Screenshot a page:** Dasite will visit the url you provided, load the page, save a screenshot of the page
+2. **Crawl the site:** Dasite will crawl the page for other urls on the same domain, and recursively visit and screenshot them as well
+3. **Compare screenshots to previous:** Dasite will compare previous screenshots to current screenshots, and report which ones have changed, how much, and in what places. It will create a diff image with highlighted pixels where the screen
+4. **Fail at threshold:** Exit with failure if the changes exceed a user definable threshold
+5. **Performance Tests:** capture lighthouse performance metrics for the pages, these are stored as JSON. The values are diffed and a new JSON file representing the diff is created
+6. **Accessibility Tests:** do an accessibility audit and store the metrics in a diffable JSON format
+7. **Security Tests:** do a security audit and diff that as well

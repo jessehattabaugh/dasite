@@ -10,8 +10,6 @@
 		"netlify-cli": "latest"
 	},
 	"scripts": {
-		"accept": "node bin/accept-snapshots.js",
-		"build": "node bin/prepare-screenshots.js",
 		"kill": "npx kill-port 3000",
 		"lint": "eslint .",
 		"start": "netlify dev",
