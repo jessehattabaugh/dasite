@@ -26,7 +26,7 @@ async function cleanScreenshots() {
 	}
 }
 
-test('🖼️ CLI takes screenshot of provided URL', async () => {
+test('CLI takes screenshot of provided URL', async () => {
 	// Start local test server
 	const { server, baseUrl } = await startServer();
 
@@ -58,7 +58,7 @@ test('🖼️ CLI takes screenshot of provided URL', async () => {
 	}
 });
 
-test('❓ CLI shows usage when no URL is provided', async () => {
+test('CLI shows usage when no URL is provided', async () => {
 	try {
 		await execAsync(`node ${cliPath}`);
 		assert.fail('Should have thrown error');
@@ -68,37 +68,12 @@ test('❓ CLI shows usage when no URL is provided', async () => {
 	}
 });
 
-test('❌ CLI handles invalid URLs gracefully', async () => {
+test('CLI handles invalid URLs gracefully', async () => {
 	try {
 		await execAsync(`node ${cliPath} http://this-is-an-invalid-domain-123456789.test`);
 		assert.fail('Should have thrown error');
 	} catch (err) {
 		assert.match(err.stderr, /Error:/);
 		assert.equal(err.code, 1);
-	}
-});
-
-test('🔗 CLI informs about additional pages without crawling by default', async () => {
-	// Start local test server with multiple pages
-	const { server, baseUrl } = await startServer();
-
-	try {
-		// Clean any previous screenshots
-		await cleanScreenshots();
-
-		// Run CLI with the test URL without crawl flag
-		const { stdout } = await execAsync(`node ${cliPath} ${baseUrl}`);
-
-		// Verify output contains info about additional links
-		assert.match(stdout, /Found \d+ additional links on the same domain/);
-		assert.match(stdout, /To crawl all pages, add the --crawl or -c flag/);
-
-		// Check if only one screenshot exists (shouldn't crawl)
-		const files = await fs.readdir(screenshotsDir);
-		const screenshots = files.filter((file) => file.endsWith('.png'));
-		assert.equal(screenshots.length, 1, 'Should have only one screenshot without crawl flag');
-	} finally {
-		// Always close the server
-		server.close();
 	}
 });

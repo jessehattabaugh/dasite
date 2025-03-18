@@ -51,24 +51,28 @@ dasite --compare http://example.com
 4. **Visual Regression Testing:**
    - Compare screenshots to previous baselines
    - Generate visual diffs highlighting pixel-level changes
+
+5. **HTML Report Generation:**
    - Create HTML reports showing before/after comparisons
+   - Interactive viewer for visual changes
+   - Export reports in different formats
 
-5. **Testing Framework:**
-   - Fail builds when changes exceed thresholds
-   - Integrate with CI/CD pipelines
-   - Support for test configuration files
+6. **Configuration:**
+   - Support for test configuration parameters
+   - visual regression threshold
+   - html report generation location
 
-6. **Performance Analysis:**
+7. **Performance Analysis:**
    - Capture core web vitals and Lighthouse metrics
    - Track performance changes over time
    - Generate performance trend reports
 
-7. **Enhanced Testing:**
+8. **Enhanced Testing:**
    - Accessibility testing and reporting
    - Security vulnerability scanning
    - SEO compliance checking
 
-8. **Advanced Features:**
+9. **Advanced Features:**
    - Multi-browser testing (Chrome, Firefox, Safari)
    - Responsive design testing at various viewport sizes
    - API for programmatic usage in test suites

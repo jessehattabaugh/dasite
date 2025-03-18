@@ -123,6 +123,31 @@ test('🕸️ CLI crawls site when -c shorthand flag is used', async () => {
 	}
 });
 
+test('🔗 CLI informs about additional pages without crawling by default', async () => {
+	// Start local test server with multiple pages
+	const { server, baseUrl } = await startServer();
+
+	try {
+		// Clean any previous screenshots
+		await cleanScreenshots();
+
+		// Run CLI with the test URL without crawl flag
+		const { stdout } = await execAsync(`node ${cliPath} ${baseUrl}`);
+
+		// Verify output contains info about additional links
+		assert.match(stdout, /Found \d+ additional links on the same domain/);
+		assert.match(stdout, /To crawl all pages, add the --crawl or -c flag/);
+
+		// Check if only one screenshot exists (shouldn't crawl)
+		const files = await fs.readdir(screenshotsDir);
+		const screenshots = files.filter((file) => file.endsWith('.png'));
+		assert.equal(screenshots.length, 1, 'Should have only one screenshot without crawl flag');
+	} finally {
+		// Always close the server
+		server.close();
+	}
+});
+
 test('🕸️ CLI handles pages without links correctly during crawl', async () => {
 	// Start local test server
 	const { server, baseUrl } = await startServer();

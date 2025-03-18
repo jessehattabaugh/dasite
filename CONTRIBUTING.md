@@ -59,8 +59,15 @@ DaSite uses Node.js's built-in test runner. Tests focus on real user behavior ra
 npm test
 
 # Run specific test file
-node --test test/screenshot.test.js
+node --test tests/some-test.js
 ```
+
+### Test File Naming Conventions
+
+- One test file per task from the roadmap
+- Files in the `/tests` directory should include the roadmap task number prefix followed by `.test.` (e.g., `1.screenshot.test.js`)
+- Using `.test.` in filenames provides better editor integration (changes icons in VSCode)
+- Test filenames should clearly indicate what functionality they're testing
 
 ### Test Server
 
