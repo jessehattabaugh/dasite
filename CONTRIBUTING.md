@@ -1,12 +1,66 @@
 # Contributing Guide
 
+## Project Overview
+
+DaSite is a Node.js CLI tool that helps developers test websites by capturing screenshots, crawling sites, and comparing changes over time. It uses Playwright for browser automation.
+
+## Development Environment
+
+### Prerequisites
+
+- Node.js 16 or higher
+- npm or yarn
+- Git
+
+### Setup
+
+1. Clone the repository
+
+   ```bash
+   git clone https://github.com/yourusername/dasite.git
+   cd dasite
+   ```
+
+2. Install dependencies
+
+   ```bash
+   npm install
+   ```
+
+3. Run in development mode
+
+   ```bash
+   node index.js http://example.com
+   ```
+
+## Project Structure
+
+- `/index.js` - Main entry point for the CLI
+- `/lib/` - Core functionality modules
+- `/server.js` - Test server for development and testing
+
 ## Technologies
 
-Dasite is a Node.js script, it depends on Playwright to load and screenshot pages. It's a CLI that takes a url to a website.
+DaSite is built with:
+
+- **Node.js** - Runtime environment
+- **Playwright** - Browser automation for capturing screenshots
+- **Express** - Test server for local testing
+- **Node.js Test Runner** - For testing functionality
 
 ## Testing
 
-Dasite uses Node.js's built-in test runner. Tests focus on real user behavior rather than using mocks or fixtures.
+DaSite uses Node.js's built-in test runner. Tests focus on real user behavior rather than using mocks or fixtures.
+
+### Running Tests
+
+```bash
+# Run all tests
+npm test
+
+# Run specific test file
+node --test test/screenshot.test.js
+```
 
 ### Test Server
 
@@ -19,4 +73,21 @@ Example:
 
 ```bash
 # Run tests with custom server configuration
-TEST_SERVER_PORT=8080 TEST_SERVER_HOST=127.0.0.1 node index.js
+TEST_SERVER_PORT=8080 TEST_SERVER_HOST=127.0.0.1 npm test
+```
+
+## Pull Request Guidelines
+
+1. Create a feature branch from `main`
+2. Follow the coding style of the project
+3. Include tests for new functionality
+4. Update documentation as needed
+5. Keep PRs focused on a single issue/feature
+
+## Code Style
+
+The project follows ES Module patterns and modern JavaScript practices:
+
+- Use async/await for asynchronous code
+- Use ES Modules (import/export) rather than CommonJS
+- Maintain clear module boundaries and single responsibilities

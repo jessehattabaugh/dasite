@@ -2,23 +2,73 @@
 
 The website testing tool that vibes with your development process.
 
-## Purpose
+## Overview
 
-You know you wanna test the site; it's the first thing you want to do after every feature you implement. You want to know that the site works, and how well. You want to know if the site looks different than it did and how much, and where. You want to make sure that core page speed metrics are getting better, not worse over time. You want to make sure the site stays accessibile. You want to watch your site grow from a single page, you many with an album of screenshots along the way.You want all that to happen as fast as possible so you can push your changes and get on with the next feature. In fact, sometimes you just want to test one page at a time, or a glob of pages. You want it tested with a real browser, chrome, firefox, and webkit, and you want it tested at different screen resolutions. You don't have time to mess around with complex configuration, or writing bespoke test specs.
+DaSite is a command-line tool that helps you test websites by capturing screenshots, crawling sites, and comparing changes over time. It's designed to integrate seamlessly with your development workflow.
 
-DaSite does all of this right from the command line.
+## Features
+
+- **Screenshot pages** - Capture visual state of web pages
+- **Crawl websites** - Automatically discover and test all pages on a domain
+- **Compare changes** - Track visual differences between test runs
+
+## Installation
 
 ```bash
-npx dasite http://dasite.github.io
+npm install -g dasite
+# or use it directly
+npx dasite http://example.com
+```
+
+## Usage
+
+Basic screenshot of a single page:
+
+```bash
+dasite http://example.com
+```
+
+Crawl an entire site:
+
+```bash
+dasite --crawl http://example.com
+# or
+dasite -c http://example.com
+```
+
+Compare with baseline:
+
+```bash
+dasite --compare http://example.com
 ```
 
 ## Roadmap
 
-1. **Screenshot a page:** Dasite will visit the url you provided, load the page, save a screenshot of the page
-2. **Crawl the site:** Dasite will crawl the page for other urls on the same domain, and recursively visit and screenshot them as well
-3. **Record Baselines:** Allow the user to accept the most recent snapshots as the baseline
-4. **Compare screenshots to previous:** Dasite will compare previous screenshots to current screenshots, and report which ones have changed, how much, and in what places. It will create a diff image with highlighted pixels where the screen
-5. **Fail at threshold:** Exit with failure if the changes exceed a user definable threshold
-6. **Performance Tests:** capture lighthouse performance metrics for the pages, these are stored as JSON. The values are diffed and a new JSON file representing the diff is created
-7. **Accessibility Tests:** do an accessibility audit and store the metrics in a diffable JSON format
-8. **Security Tests:** do a security audit and diff that as well
+1. **Screenshot a page:** ✅ Visit URLs and save screenshots using Playwright
+2. **Crawl the site:** ✅ Discover and capture all pages on the same domain
+3. **Record Baselines:** ✅ Save and manage reference screenshots for comparison
+
+4. **Visual Regression Testing:**
+   - Compare screenshots to previous baselines
+   - Generate visual diffs highlighting pixel-level changes
+   - Create HTML reports showing before/after comparisons
+
+5. **Testing Framework:**
+   - Fail builds when changes exceed thresholds
+   - Integrate with CI/CD pipelines
+   - Support for test configuration files
+
+6. **Performance Analysis:**
+   - Capture core web vitals and Lighthouse metrics
+   - Track performance changes over time
+   - Generate performance trend reports
+
+7. **Enhanced Testing:**
+   - Accessibility testing and reporting
+   - Security vulnerability scanning
+   - SEO compliance checking
+
+8. **Advanced Features:**
+   - Multi-browser testing (Chrome, Firefox, Safari)
+   - Responsive design testing at various viewport sizes
+   - API for programmatic usage in test suites
