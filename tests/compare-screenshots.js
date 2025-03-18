@@ -1,12 +1,13 @@
-// filepath: /home/jesse/dasite/tests/compare-screenshots.js
 import assert from 'node:assert/strict';
 import { exec } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import pkg from 'resemblejs';
 import { promisify } from 'node:util';
 import { startServer } from '../server.js';
 import { test } from 'node:test';
+const { compareImages } = pkg;
 
 const execAsync = promisify(exec);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -585,7 +586,9 @@ test('CLI creates diff images with highlighted changed pixels', async () => {
 		await execAsync(`node ${cliPath} ${modifiedBaseUrl}`);
 
 		// Run comparison with pixel highlighting
-		const { stdout } = await execAsync(`node ${cliPath} ${modifiedBaseUrl} --compare --highlight-pixels`);
+		const { stdout } = await execAsync(
+			`node ${cliPath} ${modifiedBaseUrl} --compare --highlight-pixels`,
+		);
 
 		// Check that the comparison output mentions pixel highlighting
 		assert.match(stdout, /Comparing screenshots with pixel-level highlighting/);
@@ -637,10 +640,13 @@ test('CLI reports detailed information about changed regions', async () => {
 			contentModifier: (content) => {
 				// Make multiple changes to different areas
 				return content
-					.replace('<h1>DaSite Test Page</h1>', '<h1 style="color: blue;">DaSite Test Page - Updated</h1>')
+					.replace(
+						'<h1>DaSite Test Page</h1>',
+						'<h1 style="color: blue;">DaSite Test Page - Updated</h1>',
+					)
 					.replace(
 						'<p>This is a test page for screenshot functionality</p>',
-						'<p style="background-color: #ffeeee;">This is a modified paragraph</p>'
+						'<p style="background-color: #ffeeee;">This is a modified paragraph</p>',
 					)
 					.replace('<body>', '<body style="padding: 20px;">');
 			},
@@ -650,7 +656,9 @@ test('CLI reports detailed information about changed regions', async () => {
 		await execAsync(`node ${cliPath} ${modifiedBaseUrl}`);
 
 		// Run comparison with detailed regions reporting
-		const { stdout } = await execAsync(`node ${cliPath} ${modifiedBaseUrl} --compare --detail-regions`);
+		const { stdout } = await execAsync(
+			`node ${cliPath} ${modifiedBaseUrl} --compare --detail-regions`,
+		);
 
 		// Check that the comparison output contains detailed region information
 		assert.match(stdout, /Comparing screenshots with region analysis/);
@@ -661,7 +669,10 @@ test('CLI reports detailed information about changed regions', async () => {
 
 		// Verify that the output contains information about multiple regions
 		const regionsMatches = stdout.match(/Region \d+:/g);
-		assert.ok(regionsMatches.length >= 2, 'Should identify at least 2 separate changed regions');
+		assert.ok(
+			regionsMatches.length >= 2,
+			'Should identify at least 2 separate changed regions',
+		);
 
 		// Clean up the backup screenshot
 		await fs.unlink(backupPath);
@@ -700,10 +711,13 @@ test('CLI identifies which HTML elements have changed', async () => {
 			contentModifier: (content) => {
 				// Modify specific elements with identifiable attributes
 				return content
-					.replace('<h1>DaSite Test Page</h1>', '<h1 id="main-title">DaSite Test Page</h1>')
+					.replace(
+						'<h1>DaSite Test Page</h1>',
+						'<h1 id="main-title">DaSite Test Page</h1>',
+					)
 					.replace(
 						'<p>This is a test page for screenshot functionality</p>',
-						'<p id="description">This is a modified test page for screenshot comparison</p>'
+						'<p id="description">This is a modified test page for screenshot comparison</p>',
 					);
 			},
 		});
@@ -712,7 +726,9 @@ test('CLI identifies which HTML elements have changed', async () => {
 		await execAsync(`node ${cliPath} ${modifiedBaseUrl}`);
 
 		// Run comparison with element identification
-		const { stdout } = await execAsync(`node ${cliPath} ${modifiedBaseUrl} --compare --identify-elements`);
+		const { stdout } = await execAsync(
+			`node ${cliPath} ${modifiedBaseUrl} --compare --identify-elements`,
+		);
 
 		// Check that the comparison output identifies changed elements
 		assert.match(stdout, /Comparing screenshots with element identification/);
@@ -760,8 +776,14 @@ test('CLI generates heatmap of visual changes', async () => {
 			contentModifier: (content) => {
 				// Make changes that would produce an interesting heatmap
 				return content
-					.replace('<body>', '<body style="background: linear-gradient(to right, white, #eeeeff);">')
-					.replace('<h1>DaSite Test Page</h1>', '<h1 style="text-shadow: 2px 2px 5px rgba(0,0,0,0.3);">DaSite Test Page</h1>');
+					.replace(
+						'<body>',
+						'<body style="background: linear-gradient(to right, white, #eeeeff);">',
+					)
+					.replace(
+						'<h1>DaSite Test Page</h1>',
+						'<h1 style="text-shadow: 2px 2px 5px rgba(0,0,0,0.3);">DaSite Test Page</h1>',
+					);
 			},
 		});
 
@@ -769,7 +791,9 @@ test('CLI generates heatmap of visual changes', async () => {
 		await execAsync(`node ${cliPath} ${modifiedBaseUrl}`);
 
 		// Run comparison with heatmap generation
-		const { stdout } = await execAsync(`node ${cliPath} ${modifiedBaseUrl} --compare --heatmap`);
+		const { stdout } = await execAsync(
+			`node ${cliPath} ${modifiedBaseUrl} --compare --heatmap`,
+		);
 
 		// Check that the comparison output mentions heatmap generation
 		assert.match(stdout, /Generating visual change heatmap/);

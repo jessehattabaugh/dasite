@@ -26,7 +26,23 @@ async function cleanScreenshots() {
 	}
 }
 
-test('CLI takes screenshot of provided URL', async () => {
+// Helper function to clean snapshot directories
+async function cleanSnapshots(testType = 'playwright') {
+	try {
+		const snapshotsDir = path.join(__dirname, '..', 'dasite', 'snapshots', testType);
+		await fs.mkdir(snapshotsDir, { recursive: true });
+		const files = await fs.readdir(snapshotsDir);
+		await Promise.all(
+			files
+				.filter((file) => file.endsWith('.png'))
+				.map((file) => fs.unlink(path.join(snapshotsDir, file))),
+		);
+	} catch (err) {
+		console.error(`Error cleaning ${testType} snapshots:`, err);
+	}
+}
+
+test('🖼️ CLI takes screenshot of provided URL', async () => {
 	// Start local test server
 	const { server, baseUrl } = await startServer();
 
@@ -58,7 +74,7 @@ test('CLI takes screenshot of provided URL', async () => {
 	}
 });
 
-test('CLI shows usage when no URL is provided', async () => {
+test('❓ CLI shows usage when no URL is provided', async () => {
 	try {
 		await execAsync(`node ${cliPath}`);
 		assert.fail('Should have thrown error');
@@ -68,7 +84,7 @@ test('CLI shows usage when no URL is provided', async () => {
 	}
 });
 
-test('CLI handles invalid URLs gracefully', async () => {
+test('❌ CLI handles invalid URLs gracefully', async () => {
 	try {
 		await execAsync(`node ${cliPath} http://this-is-an-invalid-domain-123456789.test`);
 		assert.fail('Should have thrown error');
@@ -78,7 +94,7 @@ test('CLI handles invalid URLs gracefully', async () => {
 	}
 });
 
-test('CLI crawls site when --crawl flag is provided', async () => {
+test('🕸️ CLI crawls site when --crawl flag is provided', async () => {
 	// Start local test server with multiple pages
 	const { server, baseUrl } = await startServer();
 
@@ -150,7 +166,7 @@ test('CLI crawls site when --crawl flag is provided', async () => {
 	}
 });
 
-test('CLI crawls site when -c shorthand flag is used', async () => {
+test('🕸️ CLI crawls site when -c shorthand flag is used', async () => {
 	// Start local test server
 	const { server, baseUrl } = await startServer();
 
@@ -175,7 +191,7 @@ test('CLI crawls site when -c shorthand flag is used', async () => {
 	}
 });
 
-test('CLI informs about additional pages without crawling by default', async () => {
+test('🔗 CLI informs about additional pages without crawling by default', async () => {
 	// Start local test server with multiple pages
 	const { server, baseUrl } = await startServer();
 
@@ -200,7 +216,7 @@ test('CLI informs about additional pages without crawling by default', async () 
 	}
 });
 
-test('CLI handles pages without links correctly during crawl', async () => {
+test('🕸️ CLI handles pages without links correctly during crawl', async () => {
 	// Start local test server
 	const { server, baseUrl } = await startServer();
 	const noLinksUrl = `${baseUrl}/team`; // This page has just one link back to about
@@ -230,7 +246,7 @@ test('CLI handles pages without links correctly during crawl', async () => {
 	}
 });
 
-test('CLI does not follow external links during crawl', async () => {
+test('🌐 CLI does not follow external links during crawl', async () => {
 	// Start local test server
 	const { server, baseUrl } = await startServer();
 
@@ -251,6 +267,208 @@ test('CLI does not follow external links during crawl', async () => {
 		);
 
 		assert.ok(!hasExternalScreenshots, 'Should not have screenshots of external domains');
+	} finally {
+		// Always close the server
+		server.close();
+	}
+});
+
+test('📸 CLI accepts current snapshots as baselines', async () => {
+	// Start local test server
+	const { server, baseUrl } = await startServer();
+
+	try {
+		// Clean any previous screenshots and snapshots
+		await cleanScreenshots();
+		await cleanSnapshots('playwright');
+
+		// Create the snapshots directory
+		const snapshotsDir = path.join(__dirname, '..', 'dasite', 'snapshots', 'playwright');
+		await fs.mkdir(snapshotsDir, { recursive: true });
+
+		// Take screenshots
+		await execAsync(`node ${cliPath} ${baseUrl} --crawl`);
+
+		// Move screenshots to snapshots directory as .tmp.png files
+		const files = await fs.readdir(screenshotsDir);
+		const screenshots = files.filter((file) => file.endsWith('.png'));
+
+		console.log('Screenshots before moving:', screenshots);
+
+		// Create some test .tmp.png files in the snapshots directory
+		for (const screenshot of screenshots) {
+			const sourcePath = path.join(screenshotsDir, screenshot);
+			const tmpPath = path.join(snapshotsDir, screenshot.replace('.png', '.tmp.png'));
+			await fs.copyFile(sourcePath, tmpPath);
+		}
+
+		// Verify we have .tmp.png files in the snapshots directory
+		const tmpFiles = (await fs.readdir(snapshotsDir)).filter((file) =>
+			file.endsWith('.tmp.png'),
+		);
+		console.log('Temporary snapshot files:', tmpFiles);
+		assert.ok(tmpFiles.length > 0, 'Should have temporary snapshot files');
+
+		// Run the accept command
+		const { stdout } = await execAsync(`node ${cliPath} --accept`);
+
+		// Verify output mentions accepting snapshots
+		assert.match(stdout, /Accepting current playwright snapshots as baselines/);
+		assert.match(stdout, /Accepted \d+ snapshots as new baselines/);
+
+		// Check that the baseline files were created (without .tmp)
+		const baselineFiles = (await fs.readdir(snapshotsDir)).filter(
+			(file) => file.endsWith('.png') && !file.endsWith('.tmp.png'),
+		);
+
+		console.log('Baseline files:', baselineFiles);
+
+		// Should have the same number of baselines as tmp files
+		assert.equal(baselineFiles.length, tmpFiles.length, 'Should have created baseline files');
+
+		// Verify each baseline file corresponds to a tmp file
+		for (const tmpFile of tmpFiles) {
+			const baselineFile = tmpFile.replace('.tmp.png', '.png');
+			assert.ok(
+				baselineFiles.includes(baselineFile),
+				`Baseline file ${baselineFile} should exist`,
+			);
+
+			// Verify baseline file has content
+			const baselinePath = path.join(snapshotsDir, baselineFile);
+			const fileStats = await fs.stat(baselinePath);
+			assert.ok(fileStats.size > 1000, 'Baseline file should have content');
+		}
+	} finally {
+		// Always close the server
+		server.close();
+	}
+});
+
+test('📸 CLI handles accepting snapshots for multiple test types', async () => {
+	// Start local test server
+	const { server, baseUrl } = await startServer();
+
+	try {
+		// Clean any previous snapshots for different test types
+		await cleanSnapshots('playwright');
+		await cleanSnapshots('lighthouse');
+		await cleanSnapshots('axe');
+
+		// Create snapshots directories
+		const testTypes = ['playwright', 'lighthouse', 'axe'];
+		for (const type of testTypes) {
+			const dir = path.join(__dirname, '..', 'dasite', 'snapshots', type);
+			await fs.mkdir(dir, { recursive: true });
+
+			// Create a test .tmp.png file in each directory
+			const testFile = path.join(dir, 'test_snapshot.tmp.png');
+			// Create a simple 1x1 pixel PNG file
+			await fs.writeFile(
+				testFile,
+				Buffer.from(
+					'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+					'base64',
+				),
+			);
+		}
+
+		// Run the accept command with all test types
+		const { stdout } = await execAsync(`node ${cliPath} --accept --all-tests`);
+
+		// Verify output mentions accepting snapshots for all test types
+		for (const type of testTypes) {
+			assert.match(stdout, new RegExp(`Accepting current ${type} snapshots as baselines`));
+		}
+
+		// Check that baseline files were created in each directory
+		for (const type of testTypes) {
+			const dir = path.join(__dirname, '..', 'dasite', 'snapshots', type);
+			const files = await fs.readdir(dir);
+
+			// Should have both .tmp.png and .png files
+			assert.ok(
+				files.some((file) => file === 'test_snapshot.png'),
+				`Baseline file should exist in ${type} directory`,
+			);
+		}
+	} finally {
+		// Always close the server
+		server.close();
+	}
+});
+
+test('📸 CLI shows appropriate message when no snapshots to accept', async () => {
+	// Start local test server
+	const { server, baseUrl } = await startServer();
+
+	try {
+		// Clean any previous snapshots
+		await cleanSnapshots('playwright');
+
+		// Run the accept command with an empty snapshots directory
+		const { stdout } = await execAsync(`node ${cliPath} --accept`);
+
+		// Verify output shows the appropriate message
+		assert.match(stdout, /No snapshots found to accept as baselines/);
+	} finally {
+		// Always close the server
+		server.close();
+	}
+});
+
+test('📸 CLI compares against accepted baseline and detects changes', async () => {
+	// Start local test server
+	const { server, baseUrl } = await startServer();
+
+	// Color params for testing
+	const initialColor = 'ff0000'; // Red
+	const changedColor = '0000ff'; // Blue
+
+	try {
+		// Clean any previous screenshots
+		await cleanScreenshots();
+
+		// Take screenshot of page with initial color
+		const colorUrl = `${baseUrl}/color-test?bg=${initialColor}`;
+		await execAsync(`node ${cliPath} ${colorUrl}`);
+
+		// Accept current snapshot as baseline
+		const acceptOutput = await execAsync(`node ${cliPath} --accept`);
+		assert.match(acceptOutput.stdout, /Accepted \d+ snapshots as new baselines/);
+
+		// Take screenshot again with the same color - should match baseline
+		await execAsync(`node ${cliPath} ${colorUrl}`);
+
+		// Compare against baseline - should pass because colors are the same
+		const compareOutput1 = await execAsync(`node ${cliPath} --compare`);
+		assert.match(compareOutput1.stdout, /Compared \d+ screenshots/);
+		assert.doesNotMatch(compareOutput1.stdout, /Found \d+ differences/);
+
+		// Now take screenshot with different color
+		const newColorUrl = `${baseUrl}/color-test?bg=${changedColor}`;
+		await execAsync(`node ${cliPath} ${newColorUrl}`);
+
+		// Compare against baseline - should detect differences due to color change
+		try {
+			const { stdout } = await execAsync(`node ${cliPath} --compare`);
+			console.log('TEST DEBUG - this should not happen, command should have failed');
+			console.log('TEST DEBUG - stdout:', stdout);
+			assert.fail('Command should have failed with differences detected');
+		} catch (err) {
+			// We should reach here, command should exit with non-zero when differences found
+			console.log('TEST DEBUG - Error code:', err.code);
+			console.log('TEST DEBUG - stdout content:', err.stdout);
+			console.log('TEST DEBUG - stderr content:', err.stderr);
+
+			// Check if the message is in stdout or stderr
+			const output = err.stdout || err.stderr || '';
+			console.log('TEST DEBUG - Combined output:', output);
+
+			// Original test assertion - this is what's failing
+			assert.match(err.stdout, /Found \d+ differences/);
+			assert.ok(err.code !== 0, 'Exit code should be non-zero when differences found');
+		}
 	} finally {
 		// Always close the server
 		server.close();

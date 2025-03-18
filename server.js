@@ -1,156 +1,152 @@
+import { createServer } from 'http';
 import express from 'express';
-import http from 'http';
 
+/**
+ * Generate a random hex color
+ * @returns {string} - Random hex color like '#RRGGBB'
+ */
+function randomColor() {
+	const hex = Math.floor(Math.random() * 16777215).toString(16);
+	return `#${hex.padStart(6, '0')}`;
+}
+
+/**
+ * Start a test server for running dasite tests
+ * @param {Object} options - Server configuration options
+ * @param {number} [options.port] - Port to use, defaults to TEST_SERVER_PORT or 3000
+ * @param {string} [options.host] - Host to bind to, defaults to TEST_SERVER_HOST or localhost
+ * @param {Function} [options.contentModifier] - Function to modify content before sending
+ * @returns {Promise<{server: import('http').Server, baseUrl: string}>} - Server and baseUrl
+ */
 export async function startServer(options = {}) {
 	const app = express();
-	const { contentModifier } = options;
+	const port = options.port || process.env.TEST_SERVER_PORT || 3000;
+	const host = options.host || process.env.TEST_SERVER_HOST || 'localhost';
+	const contentModifier = options.contentModifier || ((content) => content);
 
-	// Helper function to apply content modifier if provided
-	const applyModifier = (content) => {
-		return contentModifier ? contentModifier(content) : content;
-	};
-
-	// Helper function to generate random color
-	const randomColor = () => {
-		const r = Math.floor(Math.random() * 256);
-		const g = Math.floor(Math.random() * 256);
-		const b = Math.floor(Math.random() * 256);
-		return `rgb(${r}, ${g}, ${b})`;
-	};
-
-	// Home page with links to other pages
+	// Home page
 	app.get('/', (req, res) => {
-		res.send(
-			applyModifier(`
+		let content = `
       <!DOCTYPE html>
       <html>
         <body>
           <h1>DaSite Test Page</h1>
           <p>This is a test page for screenshot functionality</p>
-          <ul>
-            <li><a href="/about">About</a></li>
-            <li><a href="/contact">Contact</a></li>
-            <li><a href="/products">Products</a></li>
-            <li><a href="https://example.com">External Link</a></li>
-            <li><a href="/random-color">Random Color Page</a></li>
-            <li><a href="/random-elements">Random Elements</a></li>
-            <li><a href="/partial-changes">Partial Changes</a></li>
-          </ul>
+          <nav>
+            <ul>
+              <li><a href="/about">About</a></li>
+              <li><a href="/contact">Contact</a></li>
+              <li><a href="/products">Products</a></li>
+              <li><a href="/team">Team</a></li>
+              <li><a href="/color-test">Color Test</a></li>
+              <li><a href="/random-color">Random Color</a></li>
+              <li><a href="/random-elements">Random Elements</a></li>
+              <li><a href="/partial-changes">Partial Changes</a></li>
+              <li><a href="https://example.com" rel="nofollow">External Link</a></li>
+            </ul>
+          </nav>
         </body>
       </html>
-    `),
-		);
+    `;
+
+		res.send(contentModifier(content));
 	});
 
 	// About page
 	app.get('/about', (req, res) => {
-		res.send(
-			applyModifier(`
+		let content = `
       <!DOCTYPE html>
       <html>
         <body>
-          <h1>About Page</h1>
-          <p>This is the about page</p>
+          <h1>About DaSite</h1>
+          <p>This is the about page for the DaSite test server.</p>
           <a href="/">Home</a>
-          <a href="/team">Team</a>
+          <a href="/team">Our Team</a>
         </body>
       </html>
-    `),
-		);
+    `;
+
+		res.send(contentModifier(content));
 	});
 
 	// Contact page
 	app.get('/contact', (req, res) => {
-		res.send(
-			applyModifier(`
+		let content = `
       <!DOCTYPE html>
       <html>
         <body>
-          <h1>Contact Page</h1>
-          <p>This is the contact page</p>
+          <h1>Contact Us</h1>
+          <p>This is the contact page for the DaSite test server.</p>
           <a href="/">Home</a>
         </body>
       </html>
-    `),
-		);
+    `;
+
+		res.send(contentModifier(content));
 	});
 
 	// Products page
 	app.get('/products', (req, res) => {
-		res.send(
-			applyModifier(`
+		let content = `
       <!DOCTYPE html>
       <html>
         <body>
-          <h1>Products Page</h1>
-          <p>This is the products page</p>
+          <h1>Products</h1>
+          <p>Browse our products:</p>
+          <ul>
+            <li><a href="/products/item1">Product 1</a></li>
+            <li><a href="/products/item2">Product 2</a></li>
+          </ul>
           <a href="/">Home</a>
-          <a href="/products/item1">Product 1</a>
-          <a href="/products/item2">Product 2</a>
         </body>
       </html>
-    `),
-		);
+    `;
+
+		res.send(contentModifier(content));
 	});
 
-	// Product detail pages
-	app.get('/products/item1', (req, res) => {
-		res.send(
-			applyModifier(`
+	// Product item pages
+	app.get('/products/:id', (req, res) => {
+		const productId = req.params.id;
+		let content = `
       <!DOCTYPE html>
       <html>
         <body>
-          <h1>Product 1</h1>
-          <p>Product 1 details</p>
+          <h1>Product: ${productId}</h1>
+          <p>This is the page for product ${productId}.</p>
           <a href="/products">Back to Products</a>
+          <a href="/">Home</a>
         </body>
       </html>
-    `),
-		);
-	});
+    `;
 
-	app.get('/products/item2', (req, res) => {
-		res.send(
-			applyModifier(`
-      <!DOCTYPE html>
-      <html>
-        <body>
-          <h1>Product 2</h1>
-          <p>Product 2 details</p>
-          <a href="/products">Back to Products</a>
-        </body>
-      </html>
-    `),
-		);
+		res.send(contentModifier(content));
 	});
 
 	// Team page
 	app.get('/team', (req, res) => {
-		res.send(
-			applyModifier(`
+		let content = `
       <!DOCTYPE html>
       <html>
         <body>
-          <h1>Team Page</h1>
-          <p>This is the team page</p>
-          <a href="/about">Back to About</a>
+          <h1>Our Team</h1>
+          <p>Meet our team members.</p>
+          <a href="/about">About</a>
+          <a href="/">Home</a>
         </body>
       </html>
-    `),
-		);
+    `;
+
+		res.send(contentModifier(content));
 	});
 
-	// Random color page - changes on every load
+	// Random color page
 	app.get('/random-color', (req, res) => {
 		const bgColor = randomColor();
 		const textColor = randomColor();
 		const buttonBg = randomColor();
 
-		res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-		res.setHeader('Pragma', 'no-cache');
-		res.setHeader('Expires', '0');
-
-		res.send(`
+		let content = `
       <!DOCTYPE html>
       <html>
         <body style="background-color: ${bgColor}; transition: none;">
@@ -162,102 +158,117 @@ export async function startServer(options = {}) {
           <a href="/random-color" style="color: white; background-color: ${buttonBg}; padding: 5px 10px; text-decoration: none; border-radius: 5px; margin-left: 10px;">Reload</a>
         </body>
       </html>
-    `);
+    `;
+
+		res.send(contentModifier(content));
 	});
 
-	// Random elements page - different elements on each load
+	// Color page with controllable background color
+	app.get('/color-test', (req, res) => {
+		// Get color from query param or use default
+		const bgColor = `#${req.query.bg || 'ffffff'}`;
+		const textColor = `#${req.query.text || '000000'}`;
+
+		res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+		res.setHeader('Pragma', 'no-cache');
+		res.setHeader('Expires', '0');
+
+		let content = `
+      <!DOCTYPE html>
+      <html>
+        <body style="background-color: ${bgColor}; transition: none;">
+          <h1 style="color: ${textColor};">Color Test Page</h1>
+          <p style="color: ${textColor};">This page displays colors specified in URL parameters.</p>
+          <p style="color: ${textColor};">Current background color: ${bgColor}</p>
+          <p style="color: ${textColor};">Current text color: ${textColor}</p>
+          <div style="height: 300px; width: 100%;"></div>
+          <a href="/" style="color: white; background-color: #333; padding: 5px 10px; text-decoration: none; border-radius: 5px;">Home</a>
+        </body>
+      </html>
+    `;
+
+		res.send(contentModifier(content));
+	});
+
+	// Random elements page - changes on each load
 	app.get('/random-elements', (req, res) => {
+		const bgColor = randomColor();
+		const textColor = randomColor();
 		const numElements = Math.floor(Math.random() * 10) + 1; // 1 to 10 elements
 		let elements = '';
 
 		for (let i = 0; i < numElements; i++) {
 			const elementType = Math.random() > 0.5 ? 'div' : 'p';
-			const bgColor = randomColor();
-			const textColor = randomColor();
 			const height = Math.floor(Math.random() * 100) + 20; // 20 to 120px
-			const width = Math.floor(Math.random() * 80) + 20; // 20% to 100%
-
-			elements += `
-				<${elementType} style="background-color: ${bgColor}; color: ${textColor};
-					height: ${height}px; width: ${width}%; margin: 10px; padding: 10px;
-					display: inline-block; text-align: center;">
-					Random Element #${i + 1}
-				</${elementType}>
-			`;
+			const width = `${Math.floor(Math.random() * 80) + 20}%`; // 20% to 100%
+			elements += `<${elementType} style="background-color: ${randomColor()}; color: ${textColor}; height: ${height}px; width: ${width}; margin: 10px 0;">Random Element ${
+				i + 1
+			}</${elementType}>`;
 		}
 
-		res.send(`
-			<!DOCTYPE html>
-			<html>
-				<body>
-					<h1>Random Elements Page</h1>
-					<p>This page displays a random number of elements with random colors, sizes, and types.</p>
-					<div id="elements-container">
-						${elements}
-					</div>
-					<div style="margin-top: 20px;">
-						<a href="/" style="color: white; background-color: #333; padding: 5px 10px; text-decoration: none; border-radius: 5px;">Home</a>
-						<a href="/random-elements" style="color: white; background-color: #333; padding: 5px 10px; text-decoration: none; border-radius: 5px; margin-left: 10px;">Reload</a>
-					</div>
-				</body>
-			</html>
-		`);
+		let content = `
+      <!DOCTYPE html>
+      <html>
+        <body>
+          <h1 style="color: ${textColor};">Random Elements Page</h1>
+          <p style="color: ${textColor};">This page displays a random number of elements with random styles.</p>
+          ${elements}
+          <a href="/" style="color: white; background-color: #333; padding: 5px 10px; text-decoration: none; border-radius: 5px;">Home</a>
+        </body>
+      </html>
+    `;
+
+		res.send(contentModifier(content));
 	});
 
-	// Partial changes page - only some elements change on reload
+	// Partial changes page - some parts change on each load
 	app.get('/partial-changes', (req, res) => {
-		const timestamp = new Date().toISOString();
-		const randomNumber = Math.floor(Math.random() * 1000);
+		const staticContent = `
+      <div class="static-section">
+        <h2>Static Content</h2>
+        <p>This content remains the same on each page load.</p>
+        <ul>
+          <li>Item 1</li>
+          <li>Item 2</li>
+          <li>Item 3</li>
+        </ul>
+      </div>
+    `;
 
-		res.send(`
-			<!DOCTYPE html>
-			<html>
-				<body>
-					<h1>Partial Changes Page</h1>
-					<p>This page has some elements that change on each reload and some that stay the same.</p>
-					<div style="border: 1px solid #ccc; padding: 10px; margin: 10px 0;">
-						<h3>Static Content</h3>
-						<p>This paragraph never changes.</p>
-						<div>This is also static content.</div>
-					</div>
-					<div style="border: 1px solid #ccc; padding: 10px; margin: 10px 0;">
-						<h3>Dynamic Content</h3>
-						<p id="timestamp">Current time: ${timestamp}</p>
-						<p id="random-number">Random number: ${randomNumber}</p>
-						<div style="width: 100px; height: 100px; background-color: ${randomColor()};"></div>
-					</div>
-					<div style="margin-top: 20px;">
-						<a href="/" style="color: white; background-color: #333; padding: 5px 10px; text-decoration: none; border-radius: 5px;">Home</a>
-						<a href="/partial-changes" style="color: white; background-color: #333; padding: 5px 10px; text-decoration: none; border-radius: 5px; margin-left: 10px;">Reload</a>
-					</div>
-				</body>
-			</html>
-		`);
+		const dynamicContent = `
+      <div class="dynamic-section">
+        <h2>Dynamic Content</h2>
+        <p>This content changes on each page load: ${Math.random().toString(36).substring(2, 8)}</p>
+        <div style="background-color: ${randomColor()}; padding: 20px; margin: 10px 0;">
+          Random colored box with timestamp: ${new Date().toISOString()}
+        </div>
+      </div>
+    `;
+
+		let content = `
+      <!DOCTYPE html>
+      <html>
+        <body>
+          <h1>Partial Changes Page</h1>
+          ${staticContent}
+          ${dynamicContent}
+          <a href="/" style="color: white; background-color: #333; padding: 5px 10px; text-decoration: none; border-radius: 5px;">Home</a>
+        </body>
+      </html>
+    `;
+
+		res.send(contentModifier(content));
 	});
 
-	const server = http.createServer(app);
+	// Start the server
+	const server = createServer(app);
 
-	// Use environment variables or defaults
-	const host = process.env.TEST_SERVER_HOST || 'localhost';
-
-	// Find a free port and start listening
-	await new Promise((resolve, reject) => {
-		// If TEST_SERVER_PORT is set, use it, otherwise let OS assign a port (by using 0)
-		const port = process.env.TEST_SERVER_PORT ? parseInt(process.env.TEST_SERVER_PORT, 10) : 0;
-		const host = process.env.TEST_SERVER_HOST || 'localhost';
-
-		server.listen(port, host, (err) => {
-			if (err) {
-				reject(err);
-				return;
-			}
-			resolve();
+	// Return a promise that resolves when the server is listening
+	return new Promise((resolve) => {
+		server.listen(port, host, () => {
+			const baseUrl = `http://${host}:${port}`;
+			console.log(`Test server running at ${baseUrl}`);
+			resolve({ server, baseUrl });
 		});
 	});
-
-	// Get the actual port assigned by the OS
-	const { port } = server.address();
-	const baseUrl = `http://${host}:${port}`;
-
-	return { server, baseUrl };
 }

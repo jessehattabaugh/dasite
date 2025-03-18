@@ -9,11 +9,12 @@
 	},
 	"scripts": {
 		"start": "node index.js",
-		"test": "node --test tests/main.js"
+		"test": "node tests/index.js"
 	},
 	"dependencies": {
-		"canvas": "^2.11.2",
+		"canvas": "^3.1.0",
 		"express": "^4.18.2",
-		"playwright": "^1.40.0"
+		"playwright": "^1.40.0",
+		"resemblejs": "^4.1.0"
 	}
 }

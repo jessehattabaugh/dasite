@@ -16,8 +16,9 @@ npx dasite http://dasite.github.io
 
 1. **Screenshot a page:** Dasite will visit the url you provided, load the page, save a screenshot of the page
 2. **Crawl the site:** Dasite will crawl the page for other urls on the same domain, and recursively visit and screenshot them as well
-3. **Compare screenshots to previous:** Dasite will compare previous screenshots to current screenshots, and report which ones have changed, how much, and in what places. It will create a diff image with highlighted pixels where the screen
-4. **Fail at threshold:** Exit with failure if the changes exceed a user definable threshold
-5. **Performance Tests:** capture lighthouse performance metrics for the pages, these are stored as JSON. The values are diffed and a new JSON file representing the diff is created
-6. **Accessibility Tests:** do an accessibility audit and store the metrics in a diffable JSON format
-7. **Security Tests:** do a security audit and diff that as well
+3. **Record Baselines:** Allow the user to accept the most recent snapshots as the baseline
+4. **Compare screenshots to previous:** Dasite will compare previous screenshots to current screenshots, and report which ones have changed, how much, and in what places. It will create a diff image with highlighted pixels where the screen
+5. **Fail at threshold:** Exit with failure if the changes exceed a user definable threshold
+6. **Performance Tests:** capture lighthouse performance metrics for the pages, these are stored as JSON. The values are diffed and a new JSON file representing the diff is created
+7. **Accessibility Tests:** do an accessibility audit and store the metrics in a diffable JSON format
+8. **Security Tests:** do a security audit and diff that as well
