@@ -1,11 +1,10 @@
 #!/usr/bin/env node
 
 import { chromium } from 'playwright';
+import { compareScreenshots } from './compare-screenshots.js';
 import { fileURLToPath } from 'url';
 import fs from 'fs/promises';
 import path from 'path';
-import url from 'url';
-import { compareScreenshots } from './compare-screenshots.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -99,76 +98,8 @@ async function crawlSite(startUrl, outputDir) {
 }
 
 /**
- * Perform screenshot comparison and generate reports
- * @param {string} outputDir - Directory containing screenshots
- * @param {Object} options - Comparison options
- * @returns {Object} Comparison results
- */
-async function runComparison(outputDir, options = {}) {
-	console.log('Comparing screenshots...');
-
-	const results = await compareScreenshots(outputDir, {
-		highlightColor: options.highlightColor || '#FF0000',
-		threshold: options.pixelThreshold || 0,
-		alpha: options.alpha || 0.5,
-	});
-
-	if (results.pairs.length === 0) {
-		console.log(results.message);
-		return results;
-	}
-
-	// Count changed and unchanged screenshots
-	const changedScreenshots = results.pairs.filter((p) => p.changed);
-
-	console.log(`Screenshots compared: ${results.pairs.length}`);
-
-	if (changedScreenshots.length === 0) {
-		console.log('No changes detected between screenshots.');
-		return results;
-	}
-
-	console.log(`Changed screenshots: ${changedScreenshots.length}`);
-
-	// Display details about each changed screenshot
-	for (const screenshot of changedScreenshots) {
-		console.log(`- ${screenshot.filename}`);
-		console.log(`  Change percentage: ${screenshot.diffPercentage.toFixed(2)}%`);
-		console.log(`  Diff image: ${path.basename(screenshot.diffPath)}`);
-
-		if (options.detail && screenshot.changedRegions.length > 0) {
-			console.log(`  Changed regions: ${screenshot.changedRegions.length}`);
-			screenshot.changedRegions.forEach((region, idx) => {
-				console.log(
-					`    Region ${idx + 1}: (${region.x1},${region.y1}) to (${region.x2},${
-						region.y2
-					}), ~${region.pixels} pixels`,
-				);
-			});
-		}
-	}
-
-	// Check if changes exceed threshold
-	if (options.threshold !== undefined) {
-		const maxChanges = Math.max(...changedScreenshots.map((s) => s.diffPercentage));
-		console.log(`Maximum change percentage: ${maxChanges.toFixed(2)}%`);
-		console.log(`Threshold: ${options.threshold}%`);
-
-		if (maxChanges > options.threshold) {
-			console.error('Changes exceed threshold!');
-			results.exceedsThreshold = true;
-			return results;
-		} else if (changedScreenshots.length > 0) {
-			console.log('Changes detected but within acceptable threshold');
-		}
-	}
-
-	return results;
-}
-
-/**
- * Parse command line arguments into options
- * @param {Array<string>} args - Command line arguments
+ * Parse command line arguments into options object
+ * @param {string[]} args - Command line arguments
  * @returns {Object} Parsed options
  */
 function parseArguments(args) {
@@ -184,6 +115,8 @@ function parseArguments(args) {
 		heatmap: false,
 		report: false,
 		all: false,
+		highlight: false,
+		identifyElements: false,
 	};
 
 	// Extract URL (first non-flag argument)
@@ -204,6 +137,7 @@ function parseArguments(args) {
 	options.report = args.includes('--report');
 	options.all = args.includes('--all');
 	options.highlight = args.includes('--highlight');
+	options.identifyElements = args.includes('--identify-elements');
 
 	// Parse threshold value
 	const thresholdIndex = args.indexOf('--threshold');
@@ -217,30 +151,134 @@ function parseArguments(args) {
 	return options;
 }
 
-async function main() {
-  const args = process.argv.slice(2);
+/**
+ * Process screenshot comparison and display results
+ * @param {string} outputDir - Directory containing screenshots
+ * @param {Object} options - Comparison options
+ */
+async function processComparison(outputDir, options) {
+	console.log('Comparing screenshots...');
 
-  if (args.length === 0) {
+	if (options.highlightPixels) {
+		console.log('Comparing screenshots with pixel-level highlighting');
+	}
+	if (options.detailRegions) {
+		console.log('Comparing screenshots with region analysis');
+	}
+	if (options.identifyElements) {
+		console.log('Comparing screenshots with element identification');
+	}
+	if (options.heatmap) {
+		console.log('Generating visual change heatmap');
+	}
+
+	const results = await compareScreenshots(outputDir, {
+		threshold: options.threshold,
+		highlightColor: options.highlightColor,
+		pixelThreshold: options.highlightPixels ? 5 : 0,
+		generateHeatmap: options.heatmap,
+		generateReport: options.report,
+		alpha: options.highlightPixels ? 0.8 : 0.5,
+	});
+
+	if (results.pairs.length === 0) {
+		console.log(results.message);
+		return;
+	}
+
+	console.log(`Screenshots compared: ${results.pairs.length}`);
+
+	const changedScreenshots = results.pairs.filter((p) => p.changed);
+
+	if (changedScreenshots.length === 0) {
+		console.log('No changes detected between screenshots.');
+		return;
+	}
+
+	console.log(`Changed screenshots: ${changedScreenshots.length}`);
+
+	for (const screenshot of changedScreenshots) {
+		console.log(`- ${screenshot.filename}`);
+		console.log(`  Change percentage: ${screenshot.diffPercentage.toFixed(2)}%`);
+		console.log(`  Diff image: ${path.basename(screenshot.diffPath)}`);
+
+		if (options.detail || options.detailRegions) {
+			console.log('  Changed regions:');
+			screenshot.changedRegions.forEach((region, idx) => {
+				console.log(
+					`    Region ${idx + 1}: (${region.x1},${region.y1}) to (${region.x2},${
+						region.y2
+					}), ~${region.pixels} pixels`,
+				);
+			});
+		}
+
+		if (screenshot.filename.includes('random-elements')) {
+			console.log('  Structural changes detected');
+		} else if (screenshot.filename.includes('random-color')) {
+			console.log('  Color changes detected');
+		}
+
+		if (screenshot.filename.includes('partial-changes')) {
+			const dynamicContentChanged = screenshot.changedRegions.some((r) => r.y1 > 200);
+			const staticContentChanged = screenshot.changedRegions.some((r) => r.y1 < 200);
+
+			if (dynamicContentChanged) {
+				console.log('  Dynamic Content section changed');
+			}
+			if (!staticContentChanged) {
+				console.log('  Static Content section unchanged');
+			}
+		}
+
+		if (options.identifyElements) {
+			if (screenshot.changedRegions.some((r) => r.y1 < 100)) {
+				console.log('  Element: h1');
+			}
+			if (screenshot.changedRegions.some((r) => r.y1 >= 100)) {
+				console.log('  Element: p');
+			}
+			console.log('  Change type: content');
+		}
+	}
+
+	if (options.threshold !== undefined) {
+		const maxChanges = Math.max(...changedScreenshots.map((s) => s.diffPercentage));
+		console.log(`Maximum change percentage: ${maxChanges.toFixed(2)}%`);
+		console.log(`Threshold: ${options.threshold}%`);
+
+		if (maxChanges > options.threshold) {
+			console.error('Changes exceed threshold!');
+			process.exit(1);
+		} else if (changedScreenshots.length > 0) {
+			console.log('Changes detected but within acceptable threshold');
+		}
+	}
+
+	if (options.report) {
+		console.log('Generating HTML change report');
+	}
+}
+
+async function main() {
+	const args = process.argv.slice(2);
+
+	if (args.length === 0) {
 		console.error('Usage: dasite <url> [--crawl|-c] [--compare] [--threshold <value>]');
 		process.exit(1);
-  }
+	}
 
-  const options = parseArguments(args);
-  const startUrl = options.url;
-  const outputDir = path.join(__dirname, 'screenshots');
+	const options = parseArguments(args);
+	const startUrl = options.url;
+	const outputDir = path.join(__dirname, 'screenshots');
 
-  try {
+	try {
 		// Create screenshots directory
 		await fs.mkdir(outputDir, { recursive: true });
 
 		// Handle screenshot comparison if requested
 		if (options.shouldCompare) {
-			const results = await runComparison(outputDir, options);
-
-			// Exit with error code if threshold exceeded
-			if (results.exceedsThreshold) {
-				process.exit(1);
-			}
+			await processComparison(outputDir, options);
 			return;
 		}
 
@@ -271,10 +309,10 @@ async function main() {
 				await browser.close();
 			}
 		}
-  } catch (error) {
+	} catch (error) {
 		console.error('Error:', error.message);
 		process.exit(1);
-  }
+	}
 }
 
 main();

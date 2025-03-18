@@ -144,17 +144,22 @@ export async function startServer(options = {}) {
 	app.get('/random-color', (req, res) => {
 		const bgColor = randomColor();
 		const textColor = randomColor();
+		const buttonBg = randomColor();
+		
+		res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+		res.setHeader('Pragma', 'no-cache');
+		res.setHeader('Expires', '0');
 
 		res.send(`
       <!DOCTYPE html>
       <html>
-        <body style="background-color: ${bgColor}; transition: background-color 0.5s ease;">
+        <body style="background-color: ${bgColor}; transition: none;">
           <h1 style="color: ${textColor};">Random Color Page</h1>
           <p style="color: ${textColor};">This page displays random background and text colors each time it loads.</p>
           <p style="color: ${textColor};">Current background color: ${bgColor}</p>
           <p style="color: ${textColor};">Current text color: ${textColor}</p>
-          <a href="/" style="color: white; background-color: #333; padding: 5px 10px; text-decoration: none; border-radius: 5px;">Home</a>
-          <a href="/random-color" style="color: white; background-color: #333; padding: 5px 10px; text-decoration: none; border-radius: 5px; margin-left: 10px;">Reload</a>
+          <a href="/" style="color: white; background-color: ${buttonBg}; padding: 5px 10px; text-decoration: none; border-radius: 5px;">Home</a>
+          <a href="/random-color" style="color: white; background-color: ${buttonBg}; padding: 5px 10px; text-decoration: none; border-radius: 5px; margin-left: 10px;">Reload</a>
         </body>
       </html>
     `);
@@ -233,15 +238,26 @@ export async function startServer(options = {}) {
 	const server = http.createServer(app);
 
 	// Use environment variables or defaults
-	const port = process.env.TEST_SERVER_PORT || 3000;
 	const host = process.env.TEST_SERVER_HOST || 'localhost';
 
-	await new Promise((resolve) => {
-		server.listen(port, () => resolve());
+	// Find a free port and start listening
+	await new Promise((resolve, reject) => {
+		// If TEST_SERVER_PORT is set, use it, otherwise let OS assign a port (by using 0)
+		const port = process.env.TEST_SERVER_PORT ? parseInt(process.env.TEST_SERVER_PORT, 10) : 0;
+		const host = process.env.TEST_SERVER_HOST || 'localhost';
+
+		server.listen(port, host, (err) => {
+			if (err) {
+				reject(err);
+				return;
+			}
+			resolve();
+		});
 	});
 
-	const { port: actualPort } = server.address();
-	const baseUrl = `http://${host}:${actualPort}`;
+	// Get the actual port assigned by the OS
+	const { port } = server.address();
+	const baseUrl = `http://${host}:${port}`;
 
 	return { server, baseUrl };
 }

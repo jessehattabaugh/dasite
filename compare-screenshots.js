@@ -1,186 +1,272 @@
-import { createCanvas, loadImage } from 'canvas';
-
-// Compare screenshots between current and original versions
 import fs from 'fs/promises';
 import path from 'path';
+import { createCanvas, loadImage } from 'canvas';
 
 /**
- * @typedef {Object} ComparisonResult
- * @property {string} filename - Filename of the screenshot
- * @property {boolean} changed - Whether the screenshot has changed
- * @property {number} diffPercentage - Percentage of pixels that have changed
- * @property {string} diffPath - Path to the diff image if one was created
- * @property {Array<Object>} changedRegions - Regions with significant changes
- */
-
-/**
- * Compare two images pixel by pixel and generate a diff image
- * @param {string} originalPath - Path to the original screenshot
- * @param {string} currentPath - Path to the current screenshot
- * @param {string} diffPath - Path to save the diff image
- * @param {Object} options - Comparison options
- * @param {string} [options.highlightColor='#FF0000'] - Color to highlight differences
- * @param {number} [options.threshold=0] - Threshold for pixel difference (0-255)
- * @param {number} [options.alpha=0.5] - Alpha transparency for highlighting
- * @returns {Object} Comparison result with difference metrics
+ * Compare two images and generate diff with highlights
  */
 async function compareImages(originalPath, currentPath, diffPath, options = {}) {
-	// Default options
-	const { highlightColor = '#FF0000', threshold = 0, alpha = 0.5 } = options;
+  const {
+    highlightColor = '#FF0000',
+    threshold = 0,
+    pixelThreshold = 5,
+    generateHeatmap = false,
+    alpha = 0.5,
+  } = options;
 
-	// Load both images
-	const originalImage = await loadImage(originalPath);
-	const currentImage = await loadImage(currentPath);
+  const [originalImage, currentImage] = await Promise.all([
+    loadImage(originalPath),
+    loadImage(currentPath)
+  ]);
 
-	// Create canvas for the diff image
-	const width = Math.max(originalImage.width, currentImage.width);
-	const height = Math.max(originalImage.height, currentImage.height);
-	const canvas = createCanvas(width, height);
-	const ctx = canvas.getContext('2d');
+  // Create canvas for diff image
+  const width = Math.max(originalImage.width, currentImage.width);
+  const height = Math.max(originalImage.height, currentImage.height);
+  const canvas = createCanvas(width, height);
+  const ctx = canvas.getContext('2d');
 
-	// Draw the current image as the base
-	ctx.drawImage(currentImage, 0, 0);
+  // Draw current image as base
+  ctx.drawImage(currentImage, 0, 0);
+  const baseImageData = ctx.getImageData(0, 0, width, height);
 
-	// Get image data to compare pixel by pixel
-	const originalCanvas = createCanvas(originalImage.width, originalImage.height);
-	const originalCtx = originalCanvas.getContext('2d');
-	originalCtx.drawImage(originalImage, 0, 0);
+  // Draw original image on separate canvas for comparison
+  const originalCanvas = createCanvas(width, height);
+  const originalCtx = originalCanvas.getContext('2d');
+  originalCtx.drawImage(originalImage, 0, 0);
+  const originalImageData = originalCtx.getImageData(0, 0, width, height);
 
-	const originalData = originalCtx.getImageData(0, 0, originalImage.width, originalImage.height);
-	const currentData = ctx.getImageData(0, 0, width, height);
+  // Track changes
+  let diffPixels = 0;
+  const changedRegions = [];
+  let currentRegion = null;
 
-	const diffData = ctx.createImageData(width, height);
+  // Parse highlight color
+  const r = parseInt(highlightColor.slice(1, 3), 16);
+  const g = parseInt(highlightColor.slice(3, 5), 16);
+  const b = parseInt(highlightColor.slice(5, 7), 16);
 
-	// Compare pixels and highlight differences
-	let diffPixels = 0;
-	let totalPixels =
-		Math.min(originalImage.width, currentImage.width) *
-		Math.min(originalImage.height, currentImage.height);
+  // Compare each pixel
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
 
-	// Parse highlight color
-	const r = parseInt(highlightColor.slice(1, 3), 16);
-	const g = parseInt(highlightColor.slice(3, 5), 16);
-	const b = parseInt(highlightColor.slice(5, 7), 16);
+      const originalPixel = {
+        r: originalImageData.data[i],
+        g: originalImageData.data[i + 1],
+        b: originalImageData.data[i + 2],
+        a: originalImageData.data[i + 3]
+      };
 
-	// Track regions with changes for heatmap generation
-	const changedRegions = [];
-	let currentRegion = null;
+      const currentPixel = {
+        r: baseImageData.data[i],
+        g: baseImageData.data[i + 1],
+        b: baseImageData.data[i + 2],
+        a: baseImageData.data[i + 3]
+      };
 
-	for (let y = 0; y < Math.min(originalImage.height, currentImage.height); y++) {
-		for (let x = 0; x < Math.min(originalImage.width, currentImage.width); x++) {
-			const i = (y * width + x) * 4;
-			const j = (y * originalImage.width + x) * 4;
+      // Calculate pixel difference
+      const diff = Math.sqrt(
+        Math.pow(originalPixel.r - currentPixel.r, 2) +
+        Math.pow(originalPixel.g - currentPixel.g, 2) +
+        Math.pow(originalPixel.b - currentPixel.b, 2)
+      );
 
-			// Get pixel values
-			const r1 = originalData.data[j];
-			const g1 = originalData.data[j + 1];
-			const b1 = originalData.data[j + 2];
+      if (diff > pixelThreshold) {
+        diffPixels++;
 
-			const r2 = currentData.data[i];
-			const g2 = currentData.data[i + 1];
-			const b2 = currentData.data[i + 2];
+        // Mark pixel as changed
+        baseImageData.data[i] = r;
+        baseImageData.data[i + 1] = g;
+        baseImageData.data[i + 2] = b;
+        baseImageData.data[i + 3] = Math.round(255 * alpha);
 
-			// Calculate difference
-			const diff = Math.sqrt(
-				Math.pow(r1 - r2, 2) + Math.pow(g1 - g2, 2) + Math.pow(b1 - b2, 2),
-			);
+        // Track regions
+        if (!currentRegion) {
+          currentRegion = { x1: x, y1: y, x2: x, y2: y, pixels: 1 };
+        } else {
+          const inRange = Math.abs(x - currentRegion.x2) < 20 &&
+                         Math.abs(y - currentRegion.y2) < 20;
 
-			// If difference exceeds threshold, highlight it
-			if (diff > threshold) {
-				diffPixels++;
+          if (inRange) {
+            currentRegion.x2 = Math.max(currentRegion.x2, x);
+            currentRegion.y2 = Math.max(currentRegion.y2, y);
+            currentRegion.pixels++;
+          } else {
+            if (currentRegion.pixels > 10) {
+              changedRegions.push(currentRegion);
+            }
+            currentRegion = { x1: x, y1: y, x2: x, y2: y, pixels: 1 };
+          }
+        }
+      }
+    }
+  }
 
-				// Create a highlighted pixel in the diff image
-				diffData.data[i] = r;
-				diffData.data[i + 1] = g;
-				diffData.data[i + 2] = b;
-				diffData.data[i + 3] = Math.round(255 * alpha);
+  // Add final region if it exists
+  if (currentRegion?.pixels > 10) {
+    changedRegions.push(currentRegion);
+  }
 
-				// Track regions with changes
-				if (!currentRegion) {
-					currentRegion = {
-						x1: x,
-						y1: y,
-						x2: x,
-						y2: y,
-						pixels: 1,
-					};
-				} else {
-					// If nearby, expand current region
-					const inRange =
-						Math.abs(x - currentRegion.x2) < 20 && Math.abs(y - currentRegion.y2) < 20;
+  // Put image data back
+  ctx.putImageData(baseImageData, 0, 0);
 
-					if (inRange) {
-						currentRegion.x2 = Math.max(currentRegion.x2, x);
-						currentRegion.y2 = Math.max(currentRegion.y2, y);
-						currentRegion.pixels++;
-					} else {
-						// Start a new region if too far from current one
-						if (currentRegion.pixels > 10) {
-							changedRegions.push(currentRegion);
-						}
-						currentRegion = {
-							x1: x,
-							y1: y,
-							x2: x,
-							y2: y,
-							pixels: 1,
-						};
-					}
-				}
-			} else {
-				// Copy the current image pixel
-				diffData.data[i] = currentData.data[i];
-				diffData.data[i + 1] = currentData.data[i + 1];
-				diffData.data[i + 2] = currentData.data[i + 2];
-				diffData.data[i + 3] = currentData.data[i + 3];
-			}
-		}
-	}
+  // Generate heatmap overlay if requested
+  if (generateHeatmap && changedRegions.length > 0) {
+    const heatmapPath = diffPath.replace('.diff.png', '.heatmap.png');
+    const heatmapCanvas = createCanvas(width, height);
+    const heatmapCtx = heatmapCanvas.getContext('2d');
 
-	// Add the final region if it exists
-	if (currentRegion && currentRegion.pixels > 10) {
-		changedRegions.push(currentRegion);
-	}
+    // Draw base image
+    heatmapCtx.drawImage(currentImage, 0, 0);
 
-	// Put the diff data on the canvas
-	ctx.putImageData(diffData, 0, 0);
+    // Add heat overlay
+    heatmapCtx.fillStyle = 'rgba(255,255,255,0.5)';
+    heatmapCtx.fillRect(0, 0, width, height);
 
-	// Calculate difference percentage
-	const diffPercentage = (diffPixels / totalPixels) * 100;
+    changedRegions.forEach(region => {
+      const intensity = Math.min(0.8, region.pixels / 1000);
+      heatmapCtx.fillStyle = `rgba(255,0,0,${intensity})`;
+      heatmapCtx.fillRect(
+        region.x1,
+        region.y1,
+        region.x2 - region.x1,
+        region.y2 - region.y1
+      );
+    });
 
-	// Save the diff image
-	const buffer = canvas.toBuffer('image/png');
-	await fs.writeFile(diffPath, buffer);
+    await fs.writeFile(heatmapPath, heatmapCanvas.toBuffer('image/png'));
+  }
 
-	return {
-		diffPixels,
-		totalPixels,
-		diffPercentage,
-		changedRegions,
-		width,
-		height,
-	};
+  // Save diff image
+  await fs.writeFile(diffPath, canvas.toBuffer('image/png'));
+
+  // Calculate diff percentage
+  const totalPixels = width * height;
+  const diffPercentage = (diffPixels / totalPixels) * 100;
+
+  return {
+    diffPixels,
+    totalPixels,
+    diffPercentage,
+    changedRegions,
+    width,
+    height
+  };
 }
 
 /**
- * Find all original screenshots with matching current screenshots
+ * Generate HTML comparison report
+ */
+async function generateReport(results, outputDir) {
+  const reportPath = path.join(outputDir, 'comparison-report.html');
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <title>DaSite Screenshot Comparison Report</title>
+  <style>
+ * @param {string} outputPath - Path to save report
+ */
+async function generateReport(results, outputPath) {
+	const html = `<!DOCTYPE html>
+<html>
+<head>
+  <title>DaSite Screenshot Comparison Report</title>
+  <style>
+    body { font-family: sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; }
+    .comparison { margin-bottom: 40px; border-bottom: 1px solid #eee; }
+    .images { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+    .image-container { text-align: center; }
+    img { max-width: 100%; border: 1px solid #ccc; }
+    .changed { color: #d32f2f; }
+    .unchanged { color: #388e3c; }
+    .stats { margin: 20px 0; padding: 20px; background: #f5f5f5; }
+  </style>
+</head>
+<body>
+  <h1>DaSite Screenshot Comparison Report</h1>
+
+  <div class="stats">
+    <h2>Summary</h2>
+    <p>Total pages: ${results.length}</p>
+    <p>Changed pages: ${results.filter((r) => r.changed).length}</p>
+    <p>Unchanged pages: ${results.filter((r) => !r.changed).length}</p>
+  </div>
+
+  ${results
+		.map(
+			(result) => `
+    <div class="comparison">
+      <h3 class="${result.changed ? 'changed' : 'unchanged'}">
+        ${result.filename}
+        ${result.changed ? `(${result.diffPercentage.toFixed(2)}% changed)` : '(unchanged)'}
+      </h3>
+
+      <div class="images">
+        <div class="image-container">
+          <h4>Before</h4>
+          <img src="${path.basename(result.original)}" alt="Original">
+        </div>
+
+        <div class="image-container">
+          <h4>After</h4>
+          <img src="${path.basename(result.current)}" alt="Current">
+        </div>
+
+        ${
+			result.changed
+				? `
+          <div class="image-container">
+            <h4>Diff</h4>
+            <img src="${path.basename(result.diffPath)}" alt="Diff">
+          </div>
+        `
+				: ''
+		}
+      </div>
+
+      ${
+			result.changed && result.changedRegions.length > 0
+				? `
+        <div class="regions">
+          <h4>Changed Regions</h4>
+          <ul>
+            ${result.changedRegions
+				.map(
+					(region, i) => `
+              <li>Region ${i + 1}: (${region.x1},${region.y1}) to (${region.x2},${region.y2})</li>
+            `,
+				)
+				.join('')}
+          </ul>
+        </div>
+      `
+				: ''
+		}
+    </div>
+  `,
+		)
+		.join('')}
+</body>
+</html>`;
+
+	await fs.writeFile(outputPath, html);
+}
+
+/**
+ * Find matching screenshot pairs
  * @param {string} screenshotsDir - Directory containing screenshots
- * @returns {Array<Object>} Array of screenshot pairs
  */
 async function findScreenshotPairs(screenshotsDir) {
 	const files = await fs.readdir(screenshotsDir);
+	const pairs = [];
 
 	const originalFiles = files.filter(
 		(file) => file.startsWith('original_') && file.endsWith('.png'),
 	);
 
-	const pairs = [];
-
 	for (const originalFile of originalFiles) {
-		// Extract the non-original filename
 		const currentFile = originalFile.replace('original_', '');
-
-		// Check if the current file exists
 		if (files.includes(currentFile)) {
 			pairs.push({
 				original: path.join(screenshotsDir, originalFile),
@@ -194,10 +280,9 @@ async function findScreenshotPairs(screenshotsDir) {
 }
 
 /**
- * Compare all screenshots in the specified directory
+ * Compare screenshots in directory
  * @param {string} screenshotsDir - Directory containing screenshots
  * @param {Object} options - Comparison options
- * @returns {Object} Comparison results
  */
 async function compareScreenshots(screenshotsDir, options = {}) {
 	const pairs = await findScreenshotPairs(screenshotsDir);
@@ -227,7 +312,7 @@ async function compareScreenshots(screenshotsDir, options = {}) {
 				original: pair.original,
 				current: pair.current,
 				diffPath,
-				changed: comparison.diffPercentage > 0,
+				changed: comparison.diffPercentage > (options.threshold || 0),
 				diffPercentage: comparison.diffPercentage,
 				diffPixels: comparison.diffPixels,
 				totalPixels: comparison.totalPixels,
@@ -253,12 +338,22 @@ async function compareScreenshots(screenshotsDir, options = {}) {
 		}
 	}
 
+	// Generate report if requested
+	if (options.generateReport) {
+		const reportPath = path.join(screenshotsDir, 'comparison-report.html');
+		await generateReport(results, reportPath);
+	}
+
+	const maxChange = Math.max(...results.filter((r) => r.changed).map((r) => r.diffPercentage));
+
 	return {
 		success: true,
-		message: 'Screenshots compared successfully',
+		message:
+			results.length > 0 ? 'Screenshots compared successfully' : 'No screenshots to compare',
 		pairs: results,
 		changedCount,
 		unchangedCount: pairs.length - changedCount,
+		exceedsThreshold: options.threshold !== undefined && maxChange > options.threshold,
 	};
 }
 
