@@ -1,3 +1,5 @@
 # Test Generation Instructions
 
 You are writing tests to cover the behaviors of the selected code. Avoid Jest in favor of Node.js's built-in test runner. Do not change implementation files. Do not attempt to keep test code "DRY". Do not change the testing setup, or modify unrelated tests. Do not create reusable test helpers, or utils. Be sure to test user facing interfaces and behaviors. Do not use Mocks, or Fixtures to synthesize situations that the user interface cannot be made to reach. Use the user interface to drive the application to an error state, and then write a test for that error state.
+
+adhere to the guidelines in #file:../../CONTRIBUTING.md
