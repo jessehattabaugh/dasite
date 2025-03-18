@@ -28,17 +28,15 @@ async function getSnapshotDir(testType) {
 async function takeScreenshot(page, url, outputDir) {
 	console.log(`Taking screenshot of ${url}...`);
 
-	// Generate filename from URL - normalize URL to remove query parameters
+	// Generate filename from URL - ensure consistent filenames regardless of querystring
 	const parsedUrl = new URL(url);
-	// Remove query parameters when generating filenames to ensure baseline comparisons work
-	// For test URLs like color-test with different color params
-	const urlForFilename = `${parsedUrl.hostname}${parsedUrl.pathname}`;
-
 	const filename =
-		urlForFilename
+		parsedUrl.hostname +
+		parsedUrl.pathname
 			.replace(/^https?:\/\//, '')
 			.replace(/[^\w\d]/g, '_')
-			.replace(/_+/g, '_') + '.png';
+			.replace(/_+/g, '_') +
+		'.png';
 
 	const filePath = path.join(outputDir, filename);
 
@@ -85,7 +83,12 @@ async function extractLinks(page, baseUrl) {
  */
 async function crawlSite(startUrl, outputDir) {
 	const browser = await chromium.launch();
-	const page = await browser.newPage();
+	const context = await browser.newContext({
+		// Preserve cookies when crawling
+		acceptDownloads: true,
+		storageState: {}, // Initialize empty state to store cookies
+	});
+	const page = await context.newPage();
 
 	// Track visited URLs to avoid duplicates
 	const visited = new Set();
@@ -260,7 +263,11 @@ async function main() {
 			} else {
 				// Single page screenshot
 				const browser = await chromium.launch();
-				const page = await browser.newPage();
+				// Use a context that preserves cookies
+				const context = await browser.newContext({
+					acceptDownloads: true,
+				});
+				const page = await context.newPage();
 
 				try {
 					await page.goto(url, { waitUntil: 'networkidle' });

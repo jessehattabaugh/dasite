@@ -24,6 +24,25 @@ export async function startServer(options = {}) {
 	const host = options.host || process.env.TEST_SERVER_HOST || 'localhost';
 	const contentModifier = options.contentModifier || ((content) => content);
 
+	// Enable cookie parsing middleware (moved before routes)
+	app.use(express.json());
+	app.use(express.urlencoded({ extended: true }));
+	app.use((req, res, next) => {
+		// Simple cookie parser if cookies exist in the request
+		if (req.headers.cookie) {
+			req.cookies = {};
+			req.headers.cookie.split(';').forEach((cookie) => {
+				const parts = cookie.split('=').map((part) => part.trim());
+				if (parts.length === 2) {
+					req.cookies[parts[0]] = parts[1];
+				}
+			});
+		} else {
+			req.cookies = {};
+		}
+		next();
+	});
+
 	// Home page
 	app.get('/', (req, res) => {
 		let content = `
@@ -163,11 +182,14 @@ export async function startServer(options = {}) {
 		res.send(contentModifier(content));
 	});
 
-	// Color page with controllable background color
+	// Color page with controllable background color via cookies
+	// Use it for testing by setting cookies before requesting the page:
+	// - bg-color: hex code without # (e.g., "ff0000" for red)
+	// - text-color: hex code without # (e.g., "ffffff" for white)
 	app.get('/color-test', (req, res) => {
-		// Get color from query param or use default
-		const bgColor = `#${req.query.bg || 'ffffff'}`;
-		const textColor = `#${req.query.text || '000000'}`;
+		// Get colors from cookies or use defaults
+		const bgColor = `#${req.cookies['bg-color'] || 'ffffff'}`;
+		const textColor = `#${req.cookies['text-color'] || '000000'}`;
 
 		res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
 		res.setHeader('Pragma', 'no-cache');
@@ -177,8 +199,13 @@ export async function startServer(options = {}) {
       <!DOCTYPE html>
       <html>
         <body style="background-color: ${bgColor}; transition: none;">
-          <h1 style="color: ${textColor};">Color Test Page</h1>
-          <p style="color: ${textColor};">This page displays colors specified in URL parameters.</p>
+          <h1 style="color: ${textColor};">Cookie-Based Color Test Page</h1>
+          <p style="color: ${textColor};">This page displays colors specified in cookies.</p>
+          <p style="color: ${textColor};">To change colors, set these cookies before visiting:</p>
+          <ul style="color: ${textColor};">
+            <li>bg-color: hex code without # (e.g., "ff0000" for red background)</li>
+            <li>text-color: hex code without # (e.g., "ffffff" for white text)</li>
+          </ul>
           <p style="color: ${textColor};">Current background color: ${bgColor}</p>
           <p style="color: ${textColor};">Current text color: ${textColor}</p>
           <div style="height: 300px; width: 100%;"></div>
