@@ -7,3 +7,5 @@ node_modules
 
 # don't commit local screenshots
 **/*.tmp.*
+
+screenshots/*.png

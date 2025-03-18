@@ -1,19 +1,26 @@
 {
+	"name": "dasite",
+	"version": "0.1.0",
+	"description": "The website testing tool that vibes with your development process",
+	"type": "module",
+	"main": "index.js",
+	"bin": {
+		"dasite": "./index.js"
+	},
+	"scripts": {
+		"lint": "eslint .",
+		"pretest": "npm start",
+		"test": "node tests/index.js"
+	},
+	"dependencies": {
+		"playwright": "^1.40.0"
+	},
 	"devDependencies": {
 		"@eslint/compat": "latest",
 		"@eslint/eslintrc": "latest",
 		"@eslint/js": "latest",
-		"@playwright/test": "latest",
 		"eslint": "latest",
-		"glob": "latest",
 		"globals": "latest",
-		"netlify-cli": "latest"
-	},
-	"scripts": {
-		"kill": "npx kill-port 3000",
-		"lint": "eslint .",
-		"start": "netlify dev",
-		"test": "playwright test"
-	},
-	"type": "module"
+		"express": "^4.18.2"
+	}
 }
