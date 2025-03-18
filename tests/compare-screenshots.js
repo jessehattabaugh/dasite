@@ -547,6 +547,322 @@ test('CLI exits with error when changes exceed the specified threshold', async (
 	}
 });
 
+// Test for pixel-level highlighting in diff images
+test('CLI creates diff images with highlighted changed pixels', async () => {
+	// Start local test server
+	const { server, baseUrl } = await startServer();
+
+	try {
+		// Clean any previous screenshots
+		await cleanScreenshots();
+
+		// Take initial screenshot
+		await execAsync(`node ${cliPath} ${baseUrl}`);
+
+		// Verify we have the initial screenshot
+		let files = await fs.readdir(screenshotsDir);
+		const initialScreenshot = files.find((file) => file.endsWith('.png'));
+		assert.ok(initialScreenshot, 'Should have initial screenshot');
+
+		// Make a backup of the initial screenshot
+		const sourcePath = path.join(screenshotsDir, initialScreenshot);
+		const backupPath = path.join(screenshotsDir, `original_${initialScreenshot}`);
+		await fs.copyFile(sourcePath, backupPath);
+
+		// Stop the server, modify a specific element, and restart
+		server.close();
+		const { server: modifiedServer, baseUrl: modifiedBaseUrl } = await startServer({
+			contentModifier: (content) => {
+				// Make a small but visible change to a specific element
+				return content.replace(
+					'<p>This is a test page for screenshot functionality</p>',
+					'<p style="background-color: yellow; color: red;">This is a test page for screenshot functionality</p>',
+				);
+			},
+		});
+
+		// Take new screenshot
+		await execAsync(`node ${cliPath} ${modifiedBaseUrl}`);
+
+		// Run comparison with pixel highlighting
+		const { stdout } = await execAsync(`node ${cliPath} ${modifiedBaseUrl} --compare --highlight-pixels`);
+
+		// Check that the comparison output mentions pixel highlighting
+		assert.match(stdout, /Comparing screenshots with pixel-level highlighting/);
+
+		// Verify that a highlighted diff image was created
+		files = await fs.readdir(screenshotsDir);
+		const diffImages = files.filter((file) => file.includes('.diff.'));
+		assert.ok(diffImages.length > 0, 'Should have created diff image with highlighted pixels');
+
+		// Check that the diff image has content with the right indicators
+		const diffPath = path.join(screenshotsDir, diffImages[0]);
+		const stats = await fs.stat(diffPath);
+		assert.ok(stats.size > 5000, 'Highlighted diff image should have substantial content');
+
+		// Clean up the backup screenshot
+		await fs.unlink(backupPath);
+	} finally {
+		// Close the servers
+		if (server.listening) server.close();
+		if (modifiedServer && modifiedServer.listening) modifiedServer.close();
+	}
+});
+
+// Test for detailed change regions reporting
+test('CLI reports detailed information about changed regions', async () => {
+	// Start local test server
+	const { server, baseUrl } = await startServer();
+
+	try {
+		// Clean any previous screenshots
+		await cleanScreenshots();
+
+		// Take initial screenshot
+		await execAsync(`node ${cliPath} ${baseUrl}`);
+
+		// Verify we have the initial screenshot
+		let files = await fs.readdir(screenshotsDir);
+		const initialScreenshot = files.find((file) => file.endsWith('.png'));
+		assert.ok(initialScreenshot, 'Should have initial screenshot');
+
+		// Make a backup of the initial screenshot
+		const sourcePath = path.join(screenshotsDir, initialScreenshot);
+		const backupPath = path.join(screenshotsDir, `original_${initialScreenshot}`);
+		await fs.copyFile(sourcePath, backupPath);
+
+		// Stop the server, modify it to have multiple distinct changes, and restart
+		server.close();
+		const { server: modifiedServer, baseUrl: modifiedBaseUrl } = await startServer({
+			contentModifier: (content) => {
+				// Make multiple changes to different areas
+				return content
+					.replace('<h1>DaSite Test Page</h1>', '<h1 style="color: blue;">DaSite Test Page - Updated</h1>')
+					.replace(
+						'<p>This is a test page for screenshot functionality</p>',
+						'<p style="background-color: #ffeeee;">This is a modified paragraph</p>'
+					)
+					.replace('<body>', '<body style="padding: 20px;">');
+			},
+		});
+
+		// Take new screenshot
+		await execAsync(`node ${cliPath} ${modifiedBaseUrl}`);
+
+		// Run comparison with detailed regions reporting
+		const { stdout } = await execAsync(`node ${cliPath} ${modifiedBaseUrl} --compare --detail-regions`);
+
+		// Check that the comparison output contains detailed region information
+		assert.match(stdout, /Comparing screenshots with region analysis/);
+		assert.match(stdout, /Changed regions:/);
+		assert.match(stdout, /Region 1:/);
+		assert.match(stdout, /coordinates:/);
+		assert.match(stdout, /approximate size:/);
+
+		// Verify that the output contains information about multiple regions
+		const regionsMatches = stdout.match(/Region \d+:/g);
+		assert.ok(regionsMatches.length >= 2, 'Should identify at least 2 separate changed regions');
+
+		// Clean up the backup screenshot
+		await fs.unlink(backupPath);
+	} finally {
+		// Close the servers
+		if (server.listening) server.close();
+		if (modifiedServer && modifiedServer.listening) modifiedServer.close();
+	}
+});
+
+// Test for element-level change detection
+test('CLI identifies which HTML elements have changed', async () => {
+	// Start local test server
+	const { server, baseUrl } = await startServer();
+
+	try {
+		// Clean any previous screenshots
+		await cleanScreenshots();
+
+		// Take initial screenshot
+		await execAsync(`node ${cliPath} ${baseUrl}`);
+
+		// Verify we have the initial screenshot
+		let files = await fs.readdir(screenshotsDir);
+		const initialScreenshot = files.find((file) => file.endsWith('.png'));
+		assert.ok(initialScreenshot, 'Should have initial screenshot');
+
+		// Make a backup of the initial screenshot
+		const sourcePath = path.join(screenshotsDir, initialScreenshot);
+		const backupPath = path.join(screenshotsDir, `original_${initialScreenshot}`);
+		await fs.copyFile(sourcePath, backupPath);
+
+		// Stop the server, modify specific elements, and restart
+		server.close();
+		const { server: modifiedServer, baseUrl: modifiedBaseUrl } = await startServer({
+			contentModifier: (content) => {
+				// Modify specific elements with identifiable attributes
+				return content
+					.replace('<h1>DaSite Test Page</h1>', '<h1 id="main-title">DaSite Test Page</h1>')
+					.replace(
+						'<p>This is a test page for screenshot functionality</p>',
+						'<p id="description">This is a modified test page for screenshot comparison</p>'
+					);
+			},
+		});
+
+		// Take new screenshot
+		await execAsync(`node ${cliPath} ${modifiedBaseUrl}`);
+
+		// Run comparison with element identification
+		const { stdout } = await execAsync(`node ${cliPath} ${modifiedBaseUrl} --compare --identify-elements`);
+
+		// Check that the comparison output identifies changed elements
+		assert.match(stdout, /Comparing screenshots with element identification/);
+		assert.match(stdout, /Changed elements:/);
+
+		// Should identify specific elements that changed
+		assert.match(stdout, /Element: (p|h1)/);
+		assert.match(stdout, /(id|selector):/);
+		assert.match(stdout, /Change type:/);
+
+		// Clean up the backup screenshot
+		await fs.unlink(backupPath);
+	} finally {
+		// Close the servers
+		if (server.listening) server.close();
+		if (modifiedServer && modifiedServer.listening) modifiedServer.close();
+	}
+});
+
+// Test for visual change heatmap generation
+test('CLI generates heatmap of visual changes', async () => {
+	// Start local test server
+	const { server, baseUrl } = await startServer();
+
+	try {
+		// Clean any previous screenshots
+		await cleanScreenshots();
+
+		// Take initial screenshot
+		await execAsync(`node ${cliPath} ${baseUrl}`);
+
+		// Verify we have the initial screenshot
+		let files = await fs.readdir(screenshotsDir);
+		const initialScreenshot = files.find((file) => file.endsWith('.png'));
+		assert.ok(initialScreenshot, 'Should have initial screenshot');
+
+		// Make a backup of the initial screenshot
+		const sourcePath = path.join(screenshotsDir, initialScreenshot);
+		const backupPath = path.join(screenshotsDir, `original_${initialScreenshot}`);
+		await fs.copyFile(sourcePath, backupPath);
+
+		// Stop the server, modify it to have gradient changes, and restart
+		server.close();
+		const { server: modifiedServer, baseUrl: modifiedBaseUrl } = await startServer({
+			contentModifier: (content) => {
+				// Make changes that would produce an interesting heatmap
+				return content
+					.replace('<body>', '<body style="background: linear-gradient(to right, white, #eeeeff);">')
+					.replace('<h1>DaSite Test Page</h1>', '<h1 style="text-shadow: 2px 2px 5px rgba(0,0,0,0.3);">DaSite Test Page</h1>');
+			},
+		});
+
+		// Take new screenshot
+		await execAsync(`node ${cliPath} ${modifiedBaseUrl}`);
+
+		// Run comparison with heatmap generation
+		const { stdout } = await execAsync(`node ${cliPath} ${modifiedBaseUrl} --compare --heatmap`);
+
+		// Check that the comparison output mentions heatmap generation
+		assert.match(stdout, /Generating visual change heatmap/);
+
+		// Verify that a heatmap image was created
+		files = await fs.readdir(screenshotsDir);
+		const heatmapFiles = files.filter((file) => file.includes('.heatmap.'));
+		assert.ok(heatmapFiles.length > 0, 'Should have created a heatmap image');
+
+		// Clean up the backup screenshot
+		await fs.unlink(backupPath);
+	} finally {
+		// Close the servers
+		if (server.listening) server.close();
+		if (modifiedServer && modifiedServer.listening) modifiedServer.close();
+	}
+});
+
+// Test for generating change summary report
+test('CLI generates HTML report summarizing visual changes', async () => {
+	// Start local test server
+	const { server, baseUrl } = await startServer();
+
+	try {
+		// Clean any previous screenshots
+		await cleanScreenshots();
+
+		// Take initial screenshots for multiple pages
+		await execAsync(`node ${cliPath} ${baseUrl} --crawl`);
+
+		// Verify we have the initial screenshots
+		let files = await fs.readdir(screenshotsDir);
+		const initialScreenshots = files.filter((file) => file.endsWith('.png'));
+		assert.ok(initialScreenshots.length > 0, 'Should have initial screenshots');
+
+		// Make a backup of the initial screenshots
+		for (const file of initialScreenshots) {
+			const sourcePath = path.join(screenshotsDir, file);
+			const backupPath = path.join(screenshotsDir, `original_${file}`);
+			await fs.copyFile(sourcePath, backupPath);
+		}
+
+		// Stop the server, modify it, and restart
+		server.close();
+		const { server: modifiedServer, baseUrl: modifiedBaseUrl } = await startServer({
+			contentModifier: (content) => {
+				// Make some changes that will affect multiple pages
+				return content
+					.replace('<body>', '<body style="font-family: Arial, sans-serif;">')
+					.replace('<h1>', '<h1 style="color: #336699;">');
+			},
+		});
+
+		// Take new screenshots
+		await execAsync(`node ${cliPath} ${modifiedBaseUrl} --crawl`);
+
+		// Run comparison with HTML report generation
+		const { stdout } = await execAsync(`node ${cliPath} ${modifiedBaseUrl} --compare --report`);
+
+		// Check that the comparison output mentions report generation
+		assert.match(stdout, /Generating HTML change report/);
+
+		// Verify that an HTML report was created
+		files = await fs.readdir(screenshotsDir);
+		const reportFiles = files.filter((file) => file.endsWith('.html'));
+		assert.ok(reportFiles.length > 0, 'Should have created an HTML report');
+
+		// Check HTML report content
+		const reportPath = path.join(screenshotsDir, reportFiles[0]);
+		const reportContent = await fs.readFile(reportPath, 'utf-8');
+
+		// Report should contain references to the pages and changes
+		assert.match(reportContent, /DaSite Screenshot Comparison Report/i);
+		assert.match(reportContent, /Changed Pages/i);
+		assert.match(reportContent, /Before/i);
+		assert.match(reportContent, /After/i);
+		assert.match(reportContent, /Diff/i);
+
+		// Clean up the backup screenshots
+		for (const file of initialScreenshots) {
+			try {
+				await fs.unlink(path.join(screenshotsDir, `original_${file}`));
+			} catch (err) {
+				console.error(`Error removing backup screenshot ${file}:`, err);
+			}
+		}
+	} finally {
+		// Close the servers
+		if (server.listening) server.close();
+		if (modifiedServer && modifiedServer.listening) modifiedServer.close();
+	}
+});
+
 // Helper function to modify the server content
 async function startServerWithModifiedContent(modifier) {
 	const { server, baseUrl } = await startServer();
