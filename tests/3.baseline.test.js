@@ -10,17 +10,37 @@ import { test } from 'node:test';
 const execAsync = promisify(exec);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const cliPath = path.join(__dirname, '..', 'index.js');
-const screenshotsDir = path.join(__dirname, '..', 'screenshots');
+const dasiteDir = path.join(__dirname, '..', 'dasite');
 
 async function cleanScreenshots() {
 	try {
-		await fs.mkdir(screenshotsDir, { recursive: true });
-		const files = await fs.readdir(screenshotsDir);
-		await Promise.all(
-			files
-				.filter((file) => file.endsWith('.png'))
-				.map((file) => fs.unlink(path.join(screenshotsDir, file))),
-		);
+		await fs.mkdir(dasiteDir, { recursive: true });
+		// List all URL directories
+		let entries;
+		try {
+			entries = await fs.readdir(dasiteDir, { withFileTypes: true });
+		} catch (err) {
+			return;
+		}
+
+		const directories = entries
+			.filter((entry) => entry.isDirectory())
+			.map((entry) => entry.name);
+
+		// Clean each URL directory
+		for (const dir of directories) {
+			const urlDir = path.join(dasiteDir, dir);
+			try {
+				const files = await fs.readdir(urlDir);
+				for (const file of files) {
+					if (file.endsWith('.png')) {
+						await fs.unlink(path.join(urlDir, file));
+					}
+				}
+			} catch (err) {
+				// Ignore errors for individual directories
+			}
+		}
 	} catch (err) {
 		console.error('Error cleaning screenshots:', err);
 	}
@@ -29,14 +49,40 @@ async function cleanScreenshots() {
 // Helper function to clean snapshot directories
 async function cleanSnapshots(testType = 'playwright') {
 	try {
+		// Clean the snapshots directory
 		const snapshotsDir = path.join(__dirname, '..', 'dasite', 'snapshots', testType);
 		await fs.mkdir(snapshotsDir, { recursive: true });
 		const files = await fs.readdir(snapshotsDir);
 		await Promise.all(
 			files
 				.filter((file) => file.endsWith('.png'))
-				.map((file) => fs.unlink(path.join(snapshotsDir, file))),
+				.map((file) => fs.unlink(path.join(snapshotsDir, file)).catch(() => {})),
 		);
+
+		// Also clean URL directories with current.png and baseline.png files
+		const basePath = path.join(__dirname, '..', 'dasite');
+		try {
+			const entries = await fs.readdir(basePath, { withFileTypes: true });
+			const urlDirs = entries
+				.filter((entry) => entry.isDirectory() && entry.name !== 'snapshots')
+				.map((entry) => entry.name);
+
+			for (const dir of urlDirs) {
+				const urlDir = path.join(basePath, dir);
+				try {
+					const files = await fs.readdir(urlDir);
+					for (const file of files) {
+						if (file === 'current.png' || file === 'baseline.png') {
+							await fs.unlink(path.join(urlDir, file)).catch(() => {});
+						}
+					}
+				} catch (err) {
+					// Ignore errors for individual directories
+				}
+			}
+		} catch (err) {
+			// Ignore errors if dasite directory doesn't exist
+		}
 	} catch (err) {
 		console.error(`Error cleaning ${testType} snapshots:`, err);
 	}
@@ -58,17 +104,24 @@ test('📸 CLI accepts current snapshots as baselines', async () => {
 		// Take screenshots
 		await execAsync(`node ${cliPath} ${baseUrl} --crawl`);
 
-		// Move screenshots to snapshots directory as .tmp.png files
-		const files = await fs.readdir(screenshotsDir);
-		const screenshots = files.filter((file) => file.endsWith('.png'));
+		// Find all URL directories in dasite
+		const urlEntries = await fs.readdir(dasiteDir, { withFileTypes: true });
+		const urlDirectories = urlEntries
+			.filter((entry) => entry.isDirectory() && entry.name !== 'snapshots')
+			.map((entry) => entry.name);
 
-		console.log('Screenshots before moving:', screenshots);
+		console.log('Screenshots before moving:', urlDirectories);
 
 		// Create some test .tmp.png files in the snapshots directory
-		for (const screenshot of screenshots) {
-			const sourcePath = path.join(screenshotsDir, screenshot);
-			const tmpPath = path.join(snapshotsDir, screenshot.replace('.png', '.tmp.png'));
-			await fs.copyFile(sourcePath, tmpPath);
+		for (const urlDir of urlDirectories) {
+			try {
+				const sourcePath = path.join(dasiteDir, urlDir, 'current.png');
+				const tmpPath = path.join(snapshotsDir, `${urlDir}.tmp.png`);
+				await fs.copyFile(sourcePath, tmpPath);
+			} catch (err) {
+				// Skip if any errors
+				continue;
+			}
 		}
 
 		// Verify we have .tmp.png files in the snapshots directory

@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0] - 3/28/2025 - 4:00PM
 
-### [1.3.0] Screenshot comparison
+### [1.3.0] Visual Regression Testing (Roadmap Task #4 ✅)
 
 - Added pixel-by-pixel image comparison functionality
 - Added support for generating visual diffs with highlighted changes

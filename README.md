@@ -8,9 +8,9 @@ DaSite is a command-line tool that helps you test websites by capturing screensh
 
 ## Features
 
-- **Screenshot pages** - Capture visual state of web pages
-- **Crawl websites** - Automatically discover and test all pages on a domain
-- **Compare changes** - Track visual differences between test runs
+-   **Screenshot pages** - Capture visual state of web pages
+-   **Crawl websites** - Automatically discover and test all pages on a domain
+-   **Compare changes** - Track visual differences between test runs
 
 ## Installation
 
@@ -48,31 +48,48 @@ dasite --compare http://example.com
 2. **Crawl the site:** ✅ Discover and capture all pages on the same domain
 3. **Record Baselines:** ✅ Save and manage reference screenshots for comparison
 
-4. **Visual Regression Testing:**
-   - Compare screenshots to previous baselines
-   - Generate visual diffs highlighting pixel-level changes
+4. **Visual Regression Testing:** ✅
+
+    - Compare screenshots to previous baselines
+    - Generate visual diffs highlighting pixel-level changes
 
 5. **HTML Report Generation:**
-   - Create HTML reports showing before/after comparisons
-   - Interactive viewer for visual changes
-   - Export reports in different formats
+
+    - Create HTML reports showing before/after comparisons
+    - Interactive viewer for visual changes
+    - Export reports in different formats
 
 6. **Configuration:**
-   - Support for test configuration parameters
-   - visual regression threshold
-   - html report generation location
 
-7. **Performance Analysis:**
-   - Capture core web vitals and Lighthouse metrics
-   - Track performance changes over time
-   - Generate performance trend reports
+    - Support for test configuration parameters
+    - output directory, so users can choose where to put the output products
+    - visual regression threshold
+    - html report generation location
+    - commandline arguments, or a config file
 
-8. **Enhanced Testing:**
-   - Accessibility testing and reporting
-   - Security vulnerability scanning
-   - SEO compliance checking
+7. **Multi-browser testing (Chrome, Firefox, Safari):**
 
-9. **Advanced Features:**
-   - Multi-browser testing (Chrome, Firefox, Safari)
-   - Responsive design testing at various viewport sizes
-   - API for programmatic usage in test suites
+    - extend the visual regression testing (which tests current versus previous snapshots) and compare screenshots between all three browsers (Chrome, Firefox, and Webkit).
+    - These are more likely to fail due to the many small indiscrepeancies between the browsers, so they have their own threshold, and diff files.
+    - Screenshots for other browsers are also created.
+    - User should be able to configure which browsers to use.
+
+8. **Responsive design testing:**
+
+    - test at various viewport sizes
+    - defaults to mobile, other options include desktop, and tablet
+    - user can configure emulation environments
+    - browser is configured to use touch events or not depending on profile
+    - should also be capable of testing other responsive media query features like prefers-low-motion, or light/dark mode
+
+9. **Performance Analysis:**
+
+    - Capture core web vitals and Lighthouse metrics
+    - Track performance changes over time
+    - Generate performance trend reports
+
+10. **Enhanced Testing:**
+
+-   Accessibility testing and reporting
+-   Security vulnerability scanning
+-   SEO compliance checking

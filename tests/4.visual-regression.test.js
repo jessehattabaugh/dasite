@@ -12,17 +12,37 @@ const execAsync = promisify(exec);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, '..');
 const cliPath = path.join(projectRoot, 'index.js');
-const screenshotsDir = path.join(projectRoot, 'screenshots');
+const dasiteDir = path.join(projectRoot, 'dasite');
 
 async function cleanScreenshots() {
 	try {
-		await fs.mkdir(screenshotsDir, { recursive: true });
-		const files = await fs.readdir(screenshotsDir);
-		await Promise.all(
-			files
-				.filter((file) => file.endsWith('.png'))
-				.map((file) => fs.unlink(path.join(screenshotsDir, file))),
-		);
+		await fs.mkdir(dasiteDir, { recursive: true });
+		// List all URL directories
+		let entries;
+		try {
+			entries = await fs.readdir(dasiteDir, { withFileTypes: true });
+		} catch (err) {
+			return;
+		}
+
+		const directories = entries
+			.filter((entry) => entry.isDirectory())
+			.map((entry) => entry.name);
+
+		// Clean each URL directory
+		for (const dir of directories) {
+			const urlDir = path.join(dasiteDir, dir);
+			try {
+				const files = await fs.readdir(urlDir);
+				for (const file of files) {
+					if (file.endsWith('.png')) {
+						await fs.unlink(path.join(urlDir, file));
+					}
+				}
+			} catch (err) {
+				// Ignore errors for individual directories
+			}
+		}
 	} catch (err) {
 		console.error('Error cleaning screenshots:', err);
 	}
@@ -50,27 +70,30 @@ test('Visual regression testing - compare screenshots with changed background co
 	try {
 		// Create paths and URLs
 		const colorTestUrl = `${baseUrl}/color-test`;
-		const outputDir = path.join(projectRoot, 'output');
-		const baselineDir = path.join(outputDir, 'baseline');
-		const compareDir = path.join(outputDir, 'compare');
 
-		// Ensure directories exist
-		await fs.mkdir(outputDir, { recursive: true });
-		await fs.mkdir(baselineDir, { recursive: true });
-		await fs.mkdir(compareDir, { recursive: true });
+		// Clean up previous test files
+		await cleanScreenshots();
 
 		// Step 1: Take baseline screenshot with default white background
 		console.log('Taking baseline screenshot...');
-		await execAsync(
-			`node ${path.join(projectRoot, 'index.js')} ${colorTestUrl} --output ${baselineDir}`,
-		);
+		await execAsync(`node ${cliPath} ${colorTestUrl}`);
+
+		// Get the URL directory name for color-test
+		const colorTestDir = 'localhost_color_test';
+		const urlDir = path.join(dasiteDir, colorTestDir);
+
+		// Copy the screenshot as baseline
+		await fs.copyFile(path.join(urlDir, 'current.png'), path.join(urlDir, 'baseline.png'));
 
 		// Verify baseline screenshot was created
-		const baselineFiles = await fs.readdir(baselineDir);
-		const baselineScreenshot = baselineFiles.find(
-			(file) => file.includes('color-test') && file.endsWith('.png'),
-		);
-		assert.ok(baselineScreenshot, 'Baseline screenshot should be created');
+		let baselineExists = false;
+		try {
+			await fs.access(path.join(urlDir, 'baseline.png'));
+			baselineExists = true;
+		} catch (err) {
+			// File doesn't exist
+		}
+		assert.ok(baselineExists, 'Baseline screenshot should be created');
 
 		// Step 2: Change the background color by setting a cookie directly through browser
 		console.log('Setting cookie and taking comparison screenshot...');
@@ -83,33 +106,35 @@ test('Visual regression testing - compare screenshots with changed background co
 
 		// Visit page and take screenshot with new background color
 		await page.goto(colorTestUrl);
-		const compareScreenshotPath = path.join(compareDir, 'color-test-red.png');
-		await page.screenshot({ path: compareScreenshotPath });
+		await page.screenshot({ path: path.join(urlDir, 'current.png') });
 		await browser.close();
 
-		// Step 3: Run visual regression comparison using the main application
+		// Step 3: Run visual regression comparison
 		console.log('Running visual regression comparison...');
-		// Note: Here we're directly invoking the application's main functionality
-		// without specifying explicit configuration parameters
-		await execAsync(
-			`node ${path.join(
-				projectRoot,
-				'index.js',
-			)} compare ${baselineDir}/${baselineScreenshot} ${compareScreenshotPath}`,
-		);
+		try {
+			await execAsync(`node ${cliPath} --compare`);
+		} catch (err) {
+			// Expected to fail since images are different
+		}
 
-		// Verify output includes a diff image
-		const diffDir = path.join(outputDir, 'diff');
-		const diffFiles = await fs.readdir(diffDir);
-		const diffImage = diffFiles.find((file) => file.includes('diff') && file.endsWith('.png'));
-		assert.ok(diffImage, 'Diff image should be created');
+		// Verify diff image was created
+		let diffExists = false;
+		try {
+			await fs.access(path.join(urlDir, 'diff.png'));
+			diffExists = true;
+		} catch (err) {
+			// File doesn't exist
+		}
+		assert.ok(diffExists, 'Diff image should be created');
 
-		// Verify the diff image has non-zero size (indicating changes were detected)
-		const diffStats = await fs.stat(path.join(diffDir, diffImage));
-		assert.ok(
-			diffStats.size > 1000,
-			'Diff image should not be empty and should contain visual changes',
-		);
+		// Verify the diff image has non-zero size
+		if (diffExists) {
+			const diffStats = await fs.stat(path.join(urlDir, 'diff.png'));
+			assert.ok(
+				diffStats.size > 1000,
+				'Diff image should not be empty and should contain visual changes',
+			);
+		}
 	} finally {
 		// Clean up - stop the server
 		server.close();
@@ -130,7 +155,6 @@ test('📸 CLI compares against accepted baseline and detects changes', async ()
 		await cleanSnapshots('playwright');
 
 		// Take screenshot of page with initial color by setting cookies
-		// We need to use a script that sets cookies before navigating to the page
 		const colorUrl = `${baseUrl}/color-test`;
 		const browser = await chromium.launch();
 		const context = await browser.newContext();
@@ -155,8 +179,13 @@ test('📸 CLI compares against accepted baseline and detects changes', async ()
 		await execAsync(`node ${cliPath} ${colorUrl}`);
 
 		// Accept current snapshot as baseline
-		const acceptOutput = await execAsync(`node ${cliPath} --accept`);
-		assert.match(acceptOutput.stdout, /Accepted \d+ snapshots as new baselines/);
+		const { stdout } = await execAsync(`node ${cliPath} --accept`);
+
+		// Updated assertion to match the actual output format
+		assert.match(
+			stdout,
+			/Accepting current playwright snapshots as baselines\.\.\.[\s\S]*Accepted \d+ snapshots as new baselines\./,
+		);
 
 		// Take screenshot again with the same color - should match baseline
 		await execAsync(`node ${cliPath} ${colorUrl}`);

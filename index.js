@@ -22,23 +22,31 @@ async function getSnapshotDir(testType) {
  * Takes a screenshot of a webpage
  * @param {import('playwright').Page} page - The Playwright page
  * @param {string} url - The URL to screenshot
- * @param {string} outputDir - The output directory
  * @returns {Promise<string>} - The path to the saved screenshot
  */
-async function takeScreenshot(page, url, outputDir) {
+async function takeScreenshot(page, url) {
 	console.log(`Taking screenshot of ${url}...`);
 
-	// Generate filename from URL - ensure consistent filenames regardless of querystring
+	// Generate directory name from URL - normalize URL to remove query parameters
 	const parsedUrl = new URL(url);
-	const filename =
-		parsedUrl.hostname +
-		parsedUrl.pathname
-			.replace(/^https?:\/\//, '')
-			.replace(/[^\w\d]/g, '_')
-			.replace(/_+/g, '_') +
-		'.png';
+	// Remove query parameters when generating directory name to ensure consistent naming
+	const urlForFilename = `${parsedUrl.hostname}${parsedUrl.pathname}`;
 
-	const filePath = path.join(outputDir, filename);
+	// Create a directory name from the URL
+	const dirName = urlForFilename
+		.replace(/^https?:\/\//, '')
+		.replace(/[^\w\d]/g, '_')
+		.replace(/_+/g, '_');
+
+	// Create URL-specific directory inside dasite directory
+	const dasiteDir = path.join(__dirname, 'dasite');
+	const urlDir = path.join(dasiteDir, dirName);
+
+	await fs.mkdir(dasiteDir, { recursive: true });
+	await fs.mkdir(urlDir, { recursive: true });
+
+	// Use a consistent filename pattern within the URL directory
+	const filePath = path.join(urlDir, 'current.png');
 
 	// Take screenshot
 	await page.screenshot({ path: filePath, fullPage: true });
@@ -79,9 +87,8 @@ async function extractLinks(page, baseUrl) {
 /**
  * Crawls a website and takes screenshots of each page
  * @param {string} startUrl - The starting URL
- * @param {string} outputDir - The output directory
  */
-async function crawlSite(startUrl, outputDir) {
+async function crawlSite(startUrl) {
 	const browser = await chromium.launch();
 	const context = await browser.newContext({
 		// Preserve cookies when crawling
@@ -111,7 +118,7 @@ async function crawlSite(startUrl, outputDir) {
 				await page.goto(currentUrl, { waitUntil: 'networkidle' });
 
 				// Take screenshot
-				await takeScreenshot(page, currentUrl, outputDir);
+				await takeScreenshot(page, currentUrl);
 
 				// Extract links and add new ones to queue
 				const links = await extractLinks(page, startUrl);
@@ -140,29 +147,58 @@ async function crawlSite(startUrl, outputDir) {
  */
 async function acceptSnapshots(testType = 'playwright') {
 	console.log(`Accepting current ${testType} snapshots as baselines...`);
+	let accepted = 0;
 
 	try {
+		// Check snapshots directory first (traditional approach)
 		const snapshotsDir = path.join(__dirname, 'dasite', 'snapshots', testType);
 		await fs.mkdir(snapshotsDir, { recursive: true });
 
 		const files = await fs.readdir(snapshotsDir);
 		const tmpScreenshots = files.filter((file) => file.endsWith('.tmp.png'));
 
-		if (tmpScreenshots.length === 0) {
+		if (tmpScreenshots.length > 0) {
+			for (const tmpFile of tmpScreenshots) {
+				const sourcePath = path.join(snapshotsDir, tmpFile);
+				const targetPath = path.join(snapshotsDir, tmpFile.replace('.tmp.png', '.png'));
+				await fs.copyFile(sourcePath, targetPath);
+				accepted++;
+			}
+		} else {
+			// Also check for current.png files in URL directories
+			const dasiteDir = path.join(__dirname, 'dasite');
+
+			try {
+				const entries = await fs.readdir(dasiteDir, { withFileTypes: true });
+				const directories = entries
+					.filter((entry) => entry.isDirectory() && entry.name !== 'snapshots')
+					.map((entry) => entry.name);
+
+				for (const dir of directories) {
+					const urlDir = path.join(dasiteDir, dir);
+					const currentPath = path.join(urlDir, 'current.png');
+					const baselinePath = path.join(urlDir, 'baseline.png');
+
+					try {
+						await fs.access(currentPath);
+						await fs.copyFile(currentPath, baselinePath);
+						accepted++;
+					} catch (err) {
+						// Skip if file doesn't exist
+					}
+				}
+			} catch (err) {
+				// Handle case where dasite directory doesn't exist or can't be read
+			}
+		}
+
+		// Print the appropriate message based on results
+		if (accepted > 0) {
+			console.log(`Accepted ${accepted} snapshots as new baselines.`);
+		} else {
 			console.log('No snapshots found to accept as baselines.');
-			return 0;
 		}
 
-		let accepted = 0;
-		for (const tmpFile of tmpScreenshots) {
-			const sourcePath = path.join(snapshotsDir, tmpFile);
-			const targetPath = path.join(snapshotsDir, tmpFile.replace('.tmp.png', '.png'));
-
-			await fs.copyFile(sourcePath, targetPath);
-			accepted++;
-		}
-
-		console.log(`Accepted ${accepted} snapshots as new baselines.`);
 		return accepted;
 	} catch (error) {
 		console.error('Error accepting snapshots:', error.message);
@@ -178,8 +214,6 @@ async function main() {
 		process.exit(1);
 	}
 
-	const outputDir = path.join(__dirname, 'screenshots');
-
 	// Parse flags
 	const shouldCrawl = args.includes('--crawl') || args.includes('-c');
 	const shouldAccept = args.includes('--accept');
@@ -187,9 +221,6 @@ async function main() {
 	const shouldAcceptAllTests = args.includes('--all-tests');
 
 	try {
-		// Create screenshots directory
-		await fs.mkdir(outputDir, { recursive: true });
-
 		if (shouldAccept) {
 			// Accept current snapshots as baselines
 			if (shouldAcceptAllTests) {
@@ -200,42 +231,14 @@ async function main() {
 					totalAccepted += accepted;
 				}
 			} else {
-				const accepted = await acceptSnapshots('playwright');
-				// If no snapshots were found in the snapshots directory, try accepting from screenshots dir
-				if (accepted === 0) {
-					// Copy screenshots to snapshots directory
-					const files = await fs.readdir(outputDir);
-					const screenshots = files.filter(
-						(file) => file.endsWith('.png') && !file.startsWith('original_'),
-					);
-
-					if (screenshots.length > 0) {
-						const snapshotsDir = path.join(
-							__dirname,
-							'dasite',
-							'snapshots',
-							'playwright',
-						);
-						await fs.mkdir(snapshotsDir, { recursive: true });
-
-						let copied = 0;
-						for (const screenshot of screenshots) {
-							const sourcePath = path.join(outputDir, screenshot);
-							const targetPath = path.join(outputDir, `original_${screenshot}`);
-							await fs.copyFile(sourcePath, targetPath);
-							copied++;
-						}
-
-						console.log(`Accepted ${copied} snapshots as new baselines.`);
-					}
-				}
+				await acceptSnapshots('playwright');
 			}
 			return;
 		}
 
 		if (shouldCompare) {
 			console.log('Comparing screenshots...');
-			const results = await compareScreenshots(outputDir);
+			const results = await compareScreenshots();
 			console.log(results.message);
 
 			const changedPairs = results.pairs.filter((pair) => pair.changed);
@@ -245,7 +248,6 @@ async function main() {
 
 				// This specific format is required by the test
 				process.stdout.write(`Found ${changedPairs.length} differences\n`);
-				// Using writeable stdout directly instead of console.log to ensure proper output
 
 				// Now that we've written the output, exit with error code
 				process.exit(1);
@@ -259,7 +261,7 @@ async function main() {
 
 			if (shouldCrawl) {
 				console.log(`Starting site crawl from ${url}...`);
-				await crawlSite(url, outputDir);
+				await crawlSite(url);
 			} else {
 				// Single page screenshot
 				const browser = await chromium.launch();
@@ -271,7 +273,7 @@ async function main() {
 
 				try {
 					await page.goto(url, { waitUntil: 'networkidle' });
-					await takeScreenshot(page, url, outputDir);
+					await takeScreenshot(page, url);
 
 					// Check for additional pages
 					const links = await extractLinks(page, url);

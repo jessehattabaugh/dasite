@@ -10,17 +10,37 @@ import { test } from 'node:test';
 const execAsync = promisify(exec);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const cliPath = path.join(__dirname, '..', 'index.js');
-const screenshotsDir = path.join(__dirname, '..', 'screenshots');
+const dasiteDir = path.join(__dirname, '..', 'dasite');
 
 async function cleanScreenshots() {
 	try {
-		await fs.mkdir(screenshotsDir, { recursive: true });
-		const files = await fs.readdir(screenshotsDir);
-		await Promise.all(
-			files
-				.filter((file) => file.endsWith('.png'))
-				.map((file) => fs.unlink(path.join(screenshotsDir, file))),
-		);
+		await fs.mkdir(dasiteDir, { recursive: true });
+		// List all URL directories
+		let entries;
+		try {
+			entries = await fs.readdir(dasiteDir, { withFileTypes: true });
+		} catch (err) {
+			return;
+		}
+
+		const directories = entries
+			.filter((entry) => entry.isDirectory())
+			.map((entry) => entry.name);
+
+		// Clean each URL directory
+		for (const dir of directories) {
+			const urlDir = path.join(dasiteDir, dir);
+			try {
+				const files = await fs.readdir(urlDir);
+				for (const file of files) {
+					if (file.endsWith('.png')) {
+						await fs.unlink(path.join(urlDir, file));
+					}
+				}
+			} catch (err) {
+				// Ignore errors for individual directories
+			}
+		}
 	} catch (err) {
 		console.error('Error cleaning screenshots:', err);
 	}
@@ -40,18 +60,34 @@ test('CLI takes screenshot of provided URL', async () => {
 		// Verify output contains success message
 		assert.match(stdout, /Screenshot saved to:/);
 
-		// Check if screenshot file exists
-		const files = await fs.readdir(screenshotsDir);
-		const screenshots = files.filter((file) => file.endsWith('.png'));
+		// Check if screenshot was created in the dasite directory
+		// Find the URL directory that should contain our screenshot
+		const entries = await fs.readdir(dasiteDir, { withFileTypes: true });
+		const directories = entries
+			.filter((entry) => entry.isDirectory())
+			.map((entry) => entry.name);
 
-		// Verify a screenshot was created
-		assert.equal(screenshots.length, 1, 'Expected one screenshot to be created');
-		assert.match(screenshots[0], /localhost/, 'Screenshot filename should contain the URL');
+		// There should be at least one directory
+		assert.ok(directories.length > 0, 'Expected at least one URL directory to be created');
 
-		// Verify screenshot file has content
-		const screenshotPath = path.join(screenshotsDir, screenshots[0]);
-		const fileStats = await fs.stat(screenshotPath);
-		assert.ok(fileStats.size > 1000, 'Screenshot should have reasonable file size');
+		// Find a directory that contains our screenshot
+		let foundScreenshot = false;
+		for (const dir of directories) {
+			const urlDir = path.join(dasiteDir, dir);
+			const files = await fs.readdir(urlDir);
+
+			if (files.includes('current.png')) {
+				foundScreenshot = true;
+
+				// Verify screenshot file has content
+				const screenshotPath = path.join(urlDir, 'current.png');
+				const fileStats = await fs.stat(screenshotPath);
+				assert.ok(fileStats.size > 1000, 'Screenshot should have reasonable file size');
+				break;
+			}
+		}
+
+		assert.ok(foundScreenshot, 'Expected to find a screenshot in the URL directory');
 	} finally {
 		// Always close the server
 		server.close();

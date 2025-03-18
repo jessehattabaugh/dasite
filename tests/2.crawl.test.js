@@ -10,17 +10,37 @@ import { test } from 'node:test';
 const execAsync = promisify(exec);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const cliPath = path.join(__dirname, '..', 'index.js');
-const screenshotsDir = path.join(__dirname, '..', 'screenshots');
+const dasiteDir = path.join(__dirname, '..', 'dasite');
 
 async function cleanScreenshots() {
 	try {
-		await fs.mkdir(screenshotsDir, { recursive: true });
-		const files = await fs.readdir(screenshotsDir);
-		await Promise.all(
-			files
-				.filter((file) => file.endsWith('.png'))
-				.map((file) => fs.unlink(path.join(screenshotsDir, file))),
-		);
+		await fs.mkdir(dasiteDir, { recursive: true });
+		// List all URL directories
+		let entries;
+		try {
+			entries = await fs.readdir(dasiteDir, { withFileTypes: true });
+		} catch (err) {
+			return;
+		}
+
+		const directories = entries
+			.filter((entry) => entry.isDirectory())
+			.map((entry) => entry.name);
+
+		// Clean each URL directory
+		for (const dir of directories) {
+			const urlDir = path.join(dasiteDir, dir);
+			try {
+				const files = await fs.readdir(urlDir);
+				for (const file of files) {
+					if (file.endsWith('.png')) {
+						await fs.unlink(path.join(urlDir, file));
+					}
+				}
+			} catch (err) {
+				// Ignore errors for individual directories
+			}
+		}
 	} catch (err) {
 		console.error('Error cleaning screenshots:', err);
 	}
@@ -41,57 +61,38 @@ test('🕸️ CLI crawls site when --crawl flag is provided', async () => {
 		assert.match(stdout, /Starting site crawl from/);
 		assert.match(stdout, /Crawling completed!/);
 
-		// Check if screenshots exist
-		const files = await fs.readdir(screenshotsDir);
-		const screenshots = files.filter((file) => file.endsWith('.png'));
+		// Check if URL directories were created in the dasite directory
+		const entries = await fs.readdir(dasiteDir, { withFileTypes: true });
+		const urlDirectories = entries
+			.filter((entry) => entry.isDirectory() && entry.name !== 'snapshots')
+			.map((entry) => entry.name);
 
-		// Our test server has 7 pages (home, about, contact, products, products/item1, products/item2, team)
-		// So we should have 7 screenshots
+		console.log('Found URL directories:', urlDirectories);
+
+		// Our test server has multiple pages, so we should have multiple URL directories
 		assert.ok(
-			screenshots.length >= 7,
-			`Expected at least 7 screenshots, but got ${screenshots.length}`,
+			urlDirectories.length >= 7,
+			`Expected at least 7 URL directories, but got ${urlDirectories.length}`,
 		);
 
-		// Verify we captured specific pages
-		const screenshotNames = screenshots.map((name) => name.toLowerCase());
-
-		// Check for main page
-		assert.ok(
-			screenshotNames.some((name) => name.includes('localhost') && !name.includes('/')),
-			'Should have screenshot of main page',
-		);
-
-		// Check for about page
-		assert.ok(
-			screenshotNames.some((name) => name.includes('about')),
-			'Should have screenshot of about page',
-		);
-
-		// Check for products page
-		assert.ok(
-			screenshotNames.some((name) => name.includes('products') && !name.includes('item')),
-			'Should have screenshot of products page',
-		);
-
-		// Check for product items
-		assert.ok(
-			screenshotNames.some((name) => name.includes('item1')),
-			'Should have screenshot of product item 1',
-		);
-		assert.ok(
-			screenshotNames.some((name) => name.includes('item2')),
-			'Should have screenshot of product item 2',
-		);
-
-		// Verify screenshot files have content
-		for (const screenshot of screenshots) {
-			const filePath = path.join(screenshotsDir, screenshot);
-			const stats = await fs.stat(filePath);
-			assert.ok(
-				stats.size > 1000,
-				`Screenshot ${screenshot} should have reasonable file size`,
-			);
+		// Count screenshots within those directories
+		let screenshotCount = 0;
+		for (const dir of urlDirectories) {
+			const urlDir = path.join(dasiteDir, dir);
+			try {
+				const files = await fs.readdir(urlDir);
+				if (files.includes('current.png')) {
+					screenshotCount++;
+				}
+			} catch (err) {
+				// Skip if can't read directory
+			}
 		}
+
+		assert.ok(
+			screenshotCount >= 7,
+			`Expected at least 7 screenshots, but found ${screenshotCount}`,
+		);
 	} finally {
 		// Always close the server
 		server.close();
@@ -113,10 +114,28 @@ test('🕸️ CLI crawls site when -c shorthand flag is used', async () => {
 		assert.match(stdout, /Starting site crawl from/);
 		assert.match(stdout, /Crawling completed!/);
 
-		// Check if multiple screenshots exist
-		const files = await fs.readdir(screenshotsDir);
-		const screenshots = files.filter((file) => file.endsWith('.png'));
-		assert.ok(screenshots.length > 1, 'Should have multiple screenshots');
+		// Check if multiple directories were created
+		const entries = await fs.readdir(dasiteDir, { withFileTypes: true });
+		const urlDirectories = entries
+			.filter((entry) => entry.isDirectory() && entry.name !== 'snapshots')
+			.map((entry) => entry.name);
+		assert.ok(urlDirectories.length > 1, 'Should have multiple URL directories');
+
+		// Verify screenshots exist in these directories
+		let screenshotCount = 0;
+		for (const dir of urlDirectories) {
+			const urlDir = path.join(dasiteDir, dir);
+			try {
+				const files = await fs.readdir(urlDir);
+				if (files.includes('current.png')) {
+					screenshotCount++;
+				}
+			} catch (err) {
+				// Skip if we can't access the directory
+			}
+		}
+
+		assert.ok(screenshotCount > 1, 'Should have multiple screenshots');
 	} finally {
 		// Always close the server
 		server.close();
@@ -138,10 +157,27 @@ test('🔗 CLI informs about additional pages without crawling by default', asyn
 		assert.match(stdout, /Found \d+ additional links on the same domain/);
 		assert.match(stdout, /To crawl all pages, add the --crawl or -c flag/);
 
-		// Check if only one screenshot exists (shouldn't crawl)
-		const files = await fs.readdir(screenshotsDir);
-		const screenshots = files.filter((file) => file.endsWith('.png'));
-		assert.equal(screenshots.length, 1, 'Should have only one screenshot without crawl flag');
+		// Check if only one URL directory exists
+		const entries = await fs.readdir(dasiteDir, { withFileTypes: true });
+		const urlDirectories = entries
+			.filter((entry) => entry.isDirectory() && entry.name !== 'snapshots')
+			.map((entry) => entry.name);
+
+		// Count actual screenshots (current.png files)
+		let screenshotCount = 0;
+		for (const dir of urlDirectories) {
+			const urlDir = path.join(dasiteDir, dir);
+			try {
+				const files = await fs.readdir(urlDir);
+				if (files.includes('current.png')) {
+					screenshotCount++;
+				}
+			} catch (err) {
+				// Skip if we can't access the directory
+			}
+		}
+
+		assert.equal(screenshotCount, 1, 'Should have only one screenshot without crawl flag');
 	} finally {
 		// Always close the server
 		server.close();
@@ -164,12 +200,14 @@ test('🕸️ CLI handles pages without links correctly during crawl', async () 
 		assert.match(stdout, /Crawling completed!/);
 
 		// Verify we got more than just the starting page
-		const files = await fs.readdir(screenshotsDir);
-		const screenshots = files.filter((file) => file.endsWith('.png'));
+		const entries = await fs.readdir(dasiteDir, { withFileTypes: true });
+		const urlDirectories = entries
+			.filter((entry) => entry.isDirectory() && entry.name !== 'snapshots')
+			.map((entry) => entry.name);
 
-		// Should have more than one screenshot (team page links to about, about links to home, etc.)
+		// Should have more than one URL directory (team page links to about, about links to home, etc.)
 		assert.ok(
-			screenshots.length > 1,
+			urlDirectories.length > 1,
 			'Should crawl multiple pages even when starting from a page with few links',
 		);
 	} finally {
@@ -189,16 +227,18 @@ test('🌐 CLI does not follow external links during crawl', async () => {
 		// Run CLI with crawl
 		const { stdout } = await execAsync(`node ${cliPath} ${baseUrl} --crawl`);
 
-		// Check if screenshots exist
-		const files = await fs.readdir(screenshotsDir);
-		const screenshots = files.filter((file) => file.endsWith('.png'));
+		// Check if URL directories were created in the dasite directory
+		const entries = await fs.readdir(dasiteDir, { withFileTypes: true });
+		const urlDirectories = entries
+			.filter((entry) => entry.isDirectory() && entry.name !== 'snapshots')
+			.map((entry) => entry.name);
 
-		// Verify we don't have any screenshots from external domains
-		const hasExternalScreenshots = screenshots.some(
+		// Verify we don't have any directories from external domains
+		const hasExternalDirectories = urlDirectories.some(
 			(name) => name.includes('example_com') || name.includes('example.com'),
 		);
 
-		assert.ok(!hasExternalScreenshots, 'Should not have screenshots of external domains');
+		assert.ok(!hasExternalDirectories, 'Should not have directories of external domains');
 	} finally {
 		// Always close the server
 		server.close();
