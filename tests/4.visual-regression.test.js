@@ -1,88 +1,29 @@
-import { after, before, describe, test } from 'node:test';
-import { startServer, stopServer } from '../server.js';
+import {
+	cleanScreenshots,
+	cleanSnapshots,
+	cliPath,
+	dasiteDir,
+	execAsync,
+	runCrawlTest,
+} from '../index.js';
+import { describe, test } from 'node:test';
 
 import assert from 'node:assert';
 import { chromium } from 'playwright';
-import { exec } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
-import { promises as fs } from 'node:fs';
-import path from 'node:path';
-import { promisify } from 'node:util';
-
-const execAsync = promisify(exec);
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const projectRoot = path.resolve(__dirname, '..');
-const cliPath = path.join(projectRoot, 'index.js');
-const dasiteDir = path.join(projectRoot, 'dasite');
-
-async function cleanScreenshots() {
-	try {
-		await fs.mkdir(dasiteDir, { recursive: true });
-		// List all URL directories
-		let entries;
-		try {
-			entries = await fs.readdir(dasiteDir, { withFileTypes: true });
-		} catch (err) {
-			return;
-		}
-
-		const directories = entries
-			.filter((entry) => entry.isDirectory())
-			.map((entry) => entry.name);
-
-		// Clean each URL directory
-		for (const dir of directories) {
-			const urlDir = path.join(dasiteDir, dir);
-			try {
-				const files = await fs.readdir(urlDir);
-				for (const file of files) {
-					if (file.endsWith('.png')) {
-						await fs.unlink(path.join(urlDir, file));
-					}
-				}
-			} catch (err) {
-				// Ignore errors for individual directories
-			}
-		}
-	} catch (err) {
-		console.error('Error cleaning screenshots:', err);
-	}
-}
-
-async function cleanSnapshots(testType = 'playwright') {
-	try {
-		const snapshotsDir = path.join(__dirname, '..', 'dasite', 'snapshots', testType);
-		await fs.mkdir(snapshotsDir, { recursive: true });
-		const files = await fs.readdir(snapshotsDir);
-		await Promise.all(
-			files
-				.filter((file) => file.endsWith('.png'))
-				.map((file) => fs.unlink(path.join(snapshotsDir, file))),
-		);
-	} catch (err) {
-		console.error(`Error cleaning ${testType} snapshots:`, err);
-	}
-}
+import fs from 'node:fs/promises';
+import path from 'path';
 
 describe('Visual regression functionality', () => {
-	let serverInfo;
-	const testId = 'visual-regression-test';
+	const testUrl = 'http://localhost:3000';
 
-	// Setup - start server before tests
-	before(async () => {
-		serverInfo = await startServer({ id: testId });
-		// Clean any previous screenshots
+	// Clean any previous screenshots before tests
+	test.before(async () => {
 		await cleanScreenshots();
 	});
 
-	// Teardown - stop server after tests
-	after(async () => {
-		await stopServer(testId);
-	});
-
-	test('Visual regression testing - compare screenshots with changed background color', async (t) => {
+	test('Visual regression testing - compare screenshots with changed background color', async () => {
 		// Create paths and URLs
-		const colorTestUrl = `${serverInfo.url}/color-test`;
+		const colorTestUrl = `${testUrl}/color-test`;
 
 		// Clean up previous test files
 		await cleanScreenshots();
@@ -160,7 +101,7 @@ describe('Visual regression functionality', () => {
 		await cleanSnapshots('playwright');
 
 		// Take screenshot of page with initial color by setting cookies
-		const colorUrl = `${serverInfo.url}/color-test`;
+		const colorUrl = `${testUrl}/color-test`;
 		const browser = await chromium.launch();
 		const context = await browser.newContext();
 
@@ -230,7 +171,6 @@ describe('Visual regression functionality', () => {
 		} catch (err) {
 			// Ensure we get output from somewhere - either stdout, stderr, or the error message
 			const output = err.stdout || err.stderr || err.message || '';
-			console.log('TEST DEBUG - Output content:', output);
 
 			// Test assertions - look for error indicators in all potential output streams
 			const foundDiff =
@@ -241,5 +181,61 @@ describe('Visual regression functionality', () => {
 			assert.ok(foundDiff, 'Should indicate differences were found in output');
 			assert.ok(err.code !== 0, 'Exit code should be non-zero when differences found');
 		}
+	});
+});
+
+test('⚖️ compare screenshots by default after taking screenshots', async (t) => {
+	await t.test('setup', async () => {
+		await cleanScreenshots();
+	});
+
+	const colorTestUrl = `${testUrl}/color-test`;
+
+	await t.test('should take screenshot and compare by default', async () => {
+		// First run with default background color to create baseline
+		const result1 = await runCrawlTest(`${colorTestUrl} --no-crawl`);
+		assert.strictEqual(result1.code, 0);
+
+		// Accept this as baseline
+		await runCrawlTest('--accept');
+
+		// Set cookie for red background color using direct browser control
+		const browser = await chromium.launch();
+		const context = await browser.newContext();
+		const page = await context.newPage();
+
+		// Set cookie and let it take effect
+		await context.addCookies([
+			{
+				name: 'bg-color',
+				value: 'ff0000',
+				url: colorTestUrl,
+				domain: 'localhost',
+				path: '/',
+			},
+		]);
+
+		// Visit page to ensure cookie is applied
+		await page.goto(colorTestUrl);
+		await page.waitForTimeout(100); // Give it a moment to apply styles
+		await browser.close();
+
+		// Take a new screenshot with the modified content - it should detect differences
+		const result2 = await runCrawlTest(`${colorTestUrl} --no-crawl`);
+
+		// We expect the command to exit with code 1 when differences are found
+		assert.strictEqual(result2.code, 1, 'Should exit with code 1 when differences found');
+		assert.match(result2.stdout, /Found \d+ differences/);
+	});
+
+	await t.test('should not compare with --no-compare flag', async () => {
+		const result = await runCrawlTest(`${colorTestUrl} --no-compare`);
+		assert.strictEqual(result.code, 0);
+		assert.match(result.stdout, /Screenshot saved to:/);
+		assert.doesNotMatch(result.stdout, /Comparing screenshots/);
+	});
+
+	await t.test('cleanup', async () => {
+		await cleanScreenshots();
 	});
 });

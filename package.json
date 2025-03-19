@@ -3,13 +3,14 @@
 	"version": "0.1.0",
 	"description": "The website testing tool that vibes with your development process",
 	"type": "module",
-	"main": "index.js",
+	"main": "lib/index.js",
 	"bin": {
-		"dasite": "./index.js"
+		"dasite": "lib/index.js"
 	},
 	"scripts": {
-		"start": "node index.js",
-		"test": "node --test tests/"
+		"test:server": "node tests/server.js",
+		"test:run": "node --test tests/",
+		"test": "start-server-and-test test:server http://localhost:3000 test:run"
 	},
 	"dependencies": {
 		"canvas": "^3.1.0",
@@ -18,5 +19,8 @@
 		"express": "^4.18.2",
 		"playwright": "^1.40.0",
 		"resemblejs": "^4.1.0"
+	},
+	"devDependencies": {
+		"start-server-and-test": "^2.0.3"
 	}
 }

@@ -35,9 +35,17 @@ DaSite is a Node.js CLI tool that helps developers test websites by capturing sc
 
 ## Project Structure
 
-- `/index.js` - Main entry point for the CLI
+- `/lib/index.js` - Main CLI application code and public API exports
+- `/tests/index.js` - Test utilities and re-exports for testing
 - `/lib/` - Core functionality modules
-- `/server.js` - Test server for development and testing
+- `/tests/server.js` - Test server for development and testing
+
+Each file has a specific responsibility:
+
+- `lib/index.js` handles CLI operations and exports public API
+- `tests/index.js` provides test utilities and server re-exports
+- Module files in `/lib` implement specific features
+- Test files import utilities from `tests/index.js`
 
 ## Output Directory Structure
 

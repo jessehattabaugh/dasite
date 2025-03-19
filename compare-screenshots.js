@@ -172,7 +172,13 @@ export async function compareScreenshots(options = {}) {
 		message += '\nNo changes detected';
 	}
 
-	return { pairs, message, changedPairsCount: changedPairs.length };
+	return {
+		pairs,
+		message,
+		changedPairsCount: changedPairs.length,
+		// Add success property to indicate if differences were found
+		success: changedPairs.length === 0,
+	};
 }
 
 /**
@@ -546,16 +552,41 @@ async function compareLegacyScreenshots(outputDir, options = {}) {
  */
 async function main() {
 	const args = process.argv.slice(2);
-	const shouldCrawl = args.includes('--crawl') || args.includes('-c');
 	const shouldAccept = args.includes('--accept');
-	const shouldCompare = args.includes('--compare');
+	const skipCompare = args.includes('--no-compare');
+
+	if (args.length === 0 || (args[0] && args[0].startsWith('--') && !shouldAccept)) {
+		console.log('Usage: dasite <url> [options]');
+		console.log('\nOptions:');
+		console.log('  --accept       Accept current snapshots as baselines');
+		console.log('  --no-compare   Skip comparison with baseline');
+		return;
+	}
 
 	if (shouldAccept) {
 		await acceptSnapshots();
 		return;
 	}
 
-	if (shouldCompare) {
+	let screenshotsTaken = false;
+
+	if (args[0] && !args[0].startsWith('--')) {
+		const url = args[0];
+		// Single page screenshot
+		const browser = await chromium.launch();
+		const page = await browser.newPage();
+
+		try {
+			await page.goto(url, { waitUntil: 'networkidle' });
+			await takeScreenshot(page, url);
+		} finally {
+			await browser.close();
+		}
+		screenshotsTaken = true;
+	}
+
+	// Run comparison by default unless --no-compare flag is provided
+	if (!skipCompare) {
 		console.log('Comparing screenshots...');
 		const results = await compareScreenshots();
 		console.log(results.message);
@@ -575,26 +606,6 @@ async function main() {
 
 			// Exit with error code after printing the message
 			process.exit(1);
-		}
-		return;
-	}
-
-	if (args[0] && !args[0].startsWith('--')) {
-		const url = args[0];
-		if (shouldCrawl) {
-			console.log(`Starting site crawl from ${url}...`);
-			await crawlSite(url);
-		} else {
-			// Single page screenshot
-			const browser = await chromium.launch();
-			const page = await browser.newPage();
-
-			try {
-				await page.goto(url, { waitUntil: 'networkidle' });
-				await takeScreenshot(page, url);
-			} finally {
-				await browser.close();
-			}
 		}
 	}
 }

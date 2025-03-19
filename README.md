@@ -22,24 +22,26 @@ npx dasite http://example.com
 
 ## Usage
 
-Basic screenshot of a single page:
+Basic usage (crawls the site by default):
 
 ```bash
 dasite http://example.com
 ```
 
-Crawl an entire site:
+Skip crawling and take a screenshot of only the specified page:
 
 ```bash
-dasite --crawl http://example.com
-# or
-dasite -c http://example.com
+dasite --no-crawl http://example.com
 ```
 
-Compare with baseline:
+Comparison with baseline (happens by default):
 
 ```bash
-dasite --compare http://example.com
+# Screenshots are automatically compared with baselines
+dasite http://example.com
+
+# Skip comparison with --no-compare
+dasite http://example.com --no-compare
 ```
 
 HTML reports:
@@ -61,7 +63,7 @@ dasite --export path/to/report.html --format pdf --output path/to/report.pdf
 ## Roadmap
 
 1. **Screenshot a page:** ✅ Visit URLs and save screenshots using Playwright
-2. **Crawl the site:** ✅ Discover and capture all pages on the same domain
+2. **Crawl the site:** ✅ Discover and capture all pages on the same domain (default behavior)
 3. **Record Baselines:** ✅ Save and manage reference screenshots for comparison
 
 4. **Visual Regression Testing:** ✅

@@ -15,6 +15,7 @@ let nextServerPort = 3000;
  * @param {number} [options.port] - Port to run the server on
  * @param {string} [options.host] - Host to bind the server to
  * @param {string} [options.id] - Identifier for the server instance
+ * @param {boolean} [options.modifiedContent] - Whether to serve visually modified content
  * @returns {Promise<Object>} Server info with URL and instance
  */
 export async function startServer(options = {}) {
@@ -41,6 +42,24 @@ export async function startServer(options = {}) {
 
 	// Add some test routes
 	app.get('/', (req, res) => {
+		// Serve different content if modifiedContent is true
+		if (options.modifiedContent) {
+			res.send(`
+				<html>
+					<head>
+						<title>Modified Test Server</title>
+						<style>body { background-color: red; color: white; }</style>
+					</head>
+					<body>
+						<h1>MODIFIED TEST SERVER</h1>
+						<p>This page has been visually modified for testing</p>
+						<div style="width: 500px; height: 300px; background-color: yellow;"></div>
+					</body>
+				</html>
+			`);
+			return;
+		}
+
 		res.send(`
 			<html>
 				<head><title>Test Server</title></head>
@@ -206,12 +225,19 @@ export async function startServer(options = {}) {
 				<head>
 					<title>Color Test Page</title>
 					<style>
-						body { background-color: #${bgColor}; }
+						body {
+							background-color: #${bgColor};
+							transition: background-color 0.5s ease;
+						}
+						h1 { color: ${bgColor === 'ffffff' ? '#000000' : '#ffffff'}; }
 					</style>
 				</head>
 				<body>
 					<h1>Color Test Page</h1>
-					<p>This page has a configurable background color</p>
+					<p>This page has a configurable background color via cookie</p>
+					<div style="width: 400px; height: 300px; border: 2px solid black;">
+						Background color: #${bgColor}
+					</div>
 				</body>
 			</html>
 		`);
