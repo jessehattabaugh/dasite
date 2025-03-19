@@ -39,6 +39,17 @@ DaSite is a Node.js CLI tool that helps developers test websites by capturing sc
 - `/lib/` - Core functionality modules
 - `/server.js` - Test server for development and testing
 
+## Output Directory Structure
+
+**IMPORTANT:** All snapshot and output files MUST be saved to the `/dasite` directory, not to custom directories. This includes:
+
+- Screenshots
+- Baseline images
+- Comparison results
+- HTML reports
+
+DO NOT create or use directories like `/output`, `/test-output`, etc. All file output operations should target the project's root directory.
+
 ## Technologies
 
 DaSite is built with:

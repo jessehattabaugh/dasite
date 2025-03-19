@@ -1,3 +1,6 @@
+import { after, before, describe, test } from 'node:test';
+import { startServer, stopServer } from '../server.js';
+
 import assert from 'node:assert';
 import { chromium } from 'playwright';
 import { exec } from 'node:child_process';
@@ -5,8 +8,6 @@ import { fileURLToPath } from 'node:url';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { startServer } from '../server.js';
-import { test } from 'node:test';
 
 const execAsync = promisify(exec);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -63,13 +64,25 @@ async function cleanSnapshots(testType = 'playwright') {
 	}
 }
 
-test('Visual regression testing - compare screenshots with changed background color', async (t) => {
-	// Start the test server
-	const { server, baseUrl } = await startServer();
+describe('Visual regression functionality', () => {
+	let serverInfo;
+	const testId = 'visual-regression-test';
 
-	try {
+	// Setup - start server before tests
+	before(async () => {
+		serverInfo = await startServer({ id: testId });
+		// Clean any previous screenshots
+		await cleanScreenshots();
+	});
+
+	// Teardown - stop server after tests
+	after(async () => {
+		await stopServer(testId);
+	});
+
+	test('Visual regression testing - compare screenshots with changed background color', async (t) => {
 		// Create paths and URLs
-		const colorTestUrl = `${baseUrl}/color-test`;
+		const colorTestUrl = `${serverInfo.url}/color-test`;
 
 		// Clean up previous test files
 		await cleanScreenshots();
@@ -135,27 +148,19 @@ test('Visual regression testing - compare screenshots with changed background co
 				'Diff image should not be empty and should contain visual changes',
 			);
 		}
-	} finally {
-		// Clean up - stop the server
-		server.close();
-	}
-});
+	});
 
-test('📸 CLI compares against accepted baseline and detects changes', async () => {
-	// Start local test server
-	const { server, baseUrl } = await startServer();
+	test('📸 CLI compares against accepted baseline and detects changes', async () => {
+		// Color values for testing (without the # prefix)
+		const initialColor = 'ff0000'; // Red
+		const changedColor = '0000ff'; // Blue
 
-	// Color values for testing (without the # prefix)
-	const initialColor = 'ff0000'; // Red
-	const changedColor = '0000ff'; // Blue
-
-	try {
 		// Clean any previous screenshots
 		await cleanScreenshots();
 		await cleanSnapshots('playwright');
 
 		// Take screenshot of page with initial color by setting cookies
-		const colorUrl = `${baseUrl}/color-test`;
+		const colorUrl = `${serverInfo.url}/color-test`;
 		const browser = await chromium.launch();
 		const context = await browser.newContext();
 
@@ -236,8 +241,5 @@ test('📸 CLI compares against accepted baseline and detects changes', async ()
 			assert.ok(foundDiff, 'Should indicate differences were found in output');
 			assert.ok(err.code !== 0, 'Exit code should be non-zero when differences found');
 		}
-	} finally {
-		// Always close the server
-		server.close();
-	}
+	});
 });

@@ -1,11 +1,12 @@
+import { after, before, describe, test } from 'node:test';
+import { startServer, stopServer } from '../server.js';
+
 import assert from 'node:assert/strict';
 import { exec } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { startServer } from '../server.js';
-import { test } from 'node:test';
 
 const execAsync = promisify(exec);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -22,11 +23,9 @@ async function cleanScreenshots() {
 		} catch (err) {
 			return;
 		}
-
 		const directories = entries
 			.filter((entry) => entry.isDirectory())
 			.map((entry) => entry.name);
-
 		// Clean each URL directory
 		for (const dir of directories) {
 			const urlDir = path.join(dasiteDir, dir);
@@ -46,16 +45,25 @@ async function cleanScreenshots() {
 	}
 }
 
-test('CLI takes screenshot of provided URL', async () => {
-	// Start local test server
-	const { server, baseUrl } = await startServer();
+describe('Screenshot functionality', () => {
+	let serverInfo;
+	const testId = 'screenshot-test';
 
-	try {
+	// Setup - start server before tests
+	before(async () => {
+		serverInfo = await startServer({ id: testId });
 		// Clean any previous screenshots
 		await cleanScreenshots();
+	});
 
+	// Teardown - stop server after tests
+	after(async () => {
+		await stopServer(testId);
+	});
+
+	test('CLI takes screenshot of provided URL', async () => {
 		// Run CLI with the test URL
-		const { stdout } = await execAsync(`node ${cliPath} ${baseUrl}`);
+		const { stdout } = await execAsync(`node ${cliPath} ${serverInfo.url}`);
 
 		// Verify output contains success message
 		assert.match(stdout, /Screenshot saved to:/);
@@ -75,10 +83,8 @@ test('CLI takes screenshot of provided URL', async () => {
 		for (const dir of directories) {
 			const urlDir = path.join(dasiteDir, dir);
 			const files = await fs.readdir(urlDir);
-
 			if (files.includes('current.png')) {
 				foundScreenshot = true;
-
 				// Verify screenshot file has content
 				const screenshotPath = path.join(urlDir, 'current.png');
 				const fileStats = await fs.stat(screenshotPath);
@@ -86,30 +92,26 @@ test('CLI takes screenshot of provided URL', async () => {
 				break;
 			}
 		}
-
 		assert.ok(foundScreenshot, 'Expected to find a screenshot in the URL directory');
-	} finally {
-		// Always close the server
-		server.close();
-	}
-});
+	});
 
-test('CLI shows usage when no URL is provided', async () => {
-	try {
-		await execAsync(`node ${cliPath}`);
-		assert.fail('Should have thrown error');
-	} catch (err) {
-		assert.match(err.stderr, /Usage: dasite <url>/);
-		assert.equal(err.code, 1);
-	}
-});
+	test('CLI shows usage when no URL is provided', async () => {
+		try {
+			await execAsync(`node ${cliPath}`);
+			assert.fail('Should have thrown error');
+		} catch (err) {
+			assert.match(err.stderr, /Usage: dasite <url>/);
+			assert.equal(err.code, 1);
+		}
+	});
 
-test('CLI handles invalid URLs gracefully', async () => {
-	try {
-		await execAsync(`node ${cliPath} http://this-is-an-invalid-domain-123456789.test`);
-		assert.fail('Should have thrown error');
-	} catch (err) {
-		assert.match(err.stderr, /Error:/);
-		assert.equal(err.code, 1);
-	}
+	test('CLI handles invalid URLs gracefully', async () => {
+		try {
+			await execAsync(`node ${cliPath} http://this-is-an-invalid-domain-123456789.test`);
+			assert.fail('Should have thrown error');
+		} catch (err) {
+			assert.match(err.stderr, /Error:/);
+			assert.equal(err.code, 1);
+		}
+	});
 });

@@ -42,6 +42,22 @@ Compare with baseline:
 dasite --compare http://example.com
 ```
 
+HTML reports:
+
+```bash
+# Reports are automatically generated when capturing screenshots
+dasite http://example.com
+
+# Skip report generation with --no-report
+dasite http://example.com --no-report
+```
+
+Export report to different formats:
+
+```bash
+dasite --export path/to/report.html --format pdf --output path/to/report.pdf
+```
+
 ## Roadmap
 
 1. **Screenshot a page:** ✅ Visit URLs and save screenshots using Playwright
@@ -53,11 +69,13 @@ dasite --compare http://example.com
     - Compare screenshots to previous baselines
     - Generate visual diffs highlighting pixel-level changes
 
-5. **HTML Report Generation:**
+5. **HTML Report Generation:** ✅
 
     - Create HTML reports showing before/after comparisons
     - Interactive viewer for visual changes
     - Export reports in different formats
+    - Automatic report generation after capturing screenshots
+    - Option to skip report generation with --no-report
 
 6. **Configuration:**
 

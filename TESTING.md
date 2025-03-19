@@ -27,6 +27,45 @@ Our tests are primarily integration tests that:
 
 This approach tests the entire workflow from CLI input to file output, ensuring everything works together.
 
+### Test Output Location
+
+**IMPORTANT:** All test output files MUST be saved in the `/dasite` project root directory. This includes:
+
+- Screenshots
+- Baseline images
+- Comparison results
+- HTML reports
+
+DO NOT create separate output directories like `/output`, `/test-output`, etc. Tests should clean up after themselves by removing any generated files from the `/dasite` directory when complete.
+
+### Test Server Management
+
+For proper test server handling, always use the `before` and `after` hooks with the `startServer` and `stopServer` functions:
+
+```javascript
+import { before, after } from 'node:test';
+import { startServer, stopServer } from '../server.js';
+
+describe('My Test Suite', () => {
+  let serverInfo;
+  const testId = 'unique-test-id';
+
+  before(async () => {
+    serverInfo = await startServer({ id: testId });
+    // Store serverInfo.url for test use
+  });
+
+  after(async () => {
+    await stopServer(testId);
+    // Clean up test files here
+  });
+
+  // Test cases...
+});
+```
+
+This pattern ensures that test servers are properly started before tests and cleaned up afterward, preventing hanging processes and port conflicts.
+
 ### Test Server
 
 Tests use `server.js` which provides a configurable Express server to simulate different websites with:
@@ -49,10 +88,11 @@ This ensures tests accurately represent user behavior.
 
 Common test helper functions include:
 
--   `cleanScreenshots()` - Removes previous screenshots before tests
--   `cleanSnapshots()` - Cleans baseline directories
--   `startServer()` - Configurable test server that can be modified between test
-    runs
+-   `cleanScreenshots()` - Removes previous screenshots from the `/dasite` directory before tests
+-   `cleanSnapshots()` - Cleans baseline directories within the `/dasite` directory
+-   `startServer()` - Configurable test server that can be modified between test runs
+
+All cleanup functions should target the `/dasite` directory exclusively.
 
 ## Test Naming Convention
 
@@ -113,3 +153,4 @@ When adding new tests:
 3. Clean up resources before and after tests
 4. Include both success and error cases
 5. Verify file outputs and console messages
+6. All test output must be saved to the `/dasite` directory

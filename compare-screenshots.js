@@ -15,9 +15,15 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  * @returns {Promise<Object>} - Comparison results
  */
 export async function compareScreenshots(options = {}) {
-	const { threshold = 0, alpha = 0.5, highlightColor = '#FF0000', pixelThreshold = 0 } = options;
+	const {
+		threshold = 0,
+		alpha = 0.5,
+		highlightColor = '#FF0000',
+		pixelThreshold = 0,
+		outputDir = path.join(process.cwd(), 'dasite'),
+	} = options;
 
-	const dasiteDir = path.join(__dirname, 'dasite');
+	const dasiteDir = outputDir;
 
 	try {
 		await fs.mkdir(dasiteDir, { recursive: true });
@@ -55,8 +61,11 @@ export async function compareScreenshots(options = {}) {
 	for (const dir of directories) {
 		const urlDir = path.join(dasiteDir, dir);
 		const currentPath = path.join(urlDir, 'current.png');
-		const baselinePath = path.join(urlDir, 'baseline.png');
+		const baselinePath = path.join(urlDir, 'baseline', 'current.png');
 		const diffPath = path.join(urlDir, 'diff.png');
+
+		// Ensure baseline directory exists
+		await fs.mkdir(path.join(urlDir, 'baseline'), { recursive: true });
 
 		// Check if both current and baseline exist
 		let currentExists = false;

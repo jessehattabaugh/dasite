@@ -1,11 +1,12 @@
+import { after, before, describe, test } from 'node:test';
+import { startServer, stopServer } from '../server.js';
+
 import assert from 'node:assert/strict';
 import { exec } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { startServer } from '../server.js';
-import { test } from 'node:test';
 
 const execAsync = promisify(exec);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -88,21 +89,30 @@ async function cleanSnapshots(testType = 'playwright') {
 	}
 }
 
-test('📸 CLI accepts current snapshots as baselines', async () => {
-	// Start local test server
-	const { server, baseUrl } = await startServer();
+describe('Baseline functionality', () => {
+	let serverInfo;
+	const testId = 'baseline-test';
 
-	try {
+	// Setup - start server before tests
+	before(async () => {
+		serverInfo = await startServer({ id: testId });
 		// Clean any previous screenshots and snapshots
 		await cleanScreenshots();
 		await cleanSnapshots('playwright');
+	});
 
+	// Teardown - stop server after tests
+	after(async () => {
+		await stopServer(testId);
+	});
+
+	test('📸 CLI accepts current snapshots as baselines', async () => {
 		// Create the snapshots directory
 		const snapshotsDir = path.join(__dirname, '..', 'dasite', 'snapshots', 'playwright');
 		await fs.mkdir(snapshotsDir, { recursive: true });
 
 		// Take screenshots
-		await execAsync(`node ${cliPath} ${baseUrl} --crawl`);
+		await execAsync(`node ${cliPath} ${serverInfo.url} --crawl`);
 
 		// Find all URL directories in dasite
 		const urlEntries = await fs.readdir(dasiteDir, { withFileTypes: true });
@@ -142,7 +152,6 @@ test('📸 CLI accepts current snapshots as baselines', async () => {
 		const baselineFiles = (await fs.readdir(snapshotsDir)).filter(
 			(file) => file.endsWith('.png') && !file.endsWith('.tmp.png'),
 		);
-
 		console.log('Baseline files:', baselineFiles);
 
 		// Should have the same number of baselines as tmp files
@@ -161,17 +170,9 @@ test('📸 CLI accepts current snapshots as baselines', async () => {
 			const fileStats = await fs.stat(baselinePath);
 			assert.ok(fileStats.size > 1000, 'Baseline file should have content');
 		}
-	} finally {
-		// Always close the server
-		server.close();
-	}
-});
+	});
 
-test('📸 CLI handles accepting snapshots for multiple test types', async () => {
-	// Start local test server
-	const { server, baseUrl } = await startServer();
-
-	try {
+	test('📸 CLI handles accepting snapshots for multiple test types', async () => {
 		// Clean any previous snapshots for different test types
 		await cleanSnapshots('playwright');
 		await cleanSnapshots('lighthouse');
@@ -214,17 +215,9 @@ test('📸 CLI handles accepting snapshots for multiple test types', async () =>
 				`Baseline file should exist in ${type} directory`,
 			);
 		}
-	} finally {
-		// Always close the server
-		server.close();
-	}
-});
+	});
 
-test('📸 CLI shows appropriate message when no snapshots to accept', async () => {
-	// Start local test server
-	const { server, baseUrl } = await startServer();
-
-	try {
+	test('📸 CLI shows appropriate message when no snapshots to accept', async () => {
 		// Clean any previous snapshots
 		await cleanSnapshots('playwright');
 
@@ -233,8 +226,5 @@ test('📸 CLI shows appropriate message when no snapshots to accept', async () 
 
 		// Verify output shows the appropriate message
 		assert.match(stdout, /No snapshots found to accept as baselines/);
-	} finally {
-		// Always close the server
-		server.close();
-	}
+	});
 });

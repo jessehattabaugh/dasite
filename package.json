@@ -9,10 +9,12 @@
 	},
 	"scripts": {
 		"start": "node index.js",
-		"test": "node tests/index.js"
+		"test": "node --test tests/"
 	},
 	"dependencies": {
 		"canvas": "^3.1.0",
+		"commander": "^13.1.0",
+		"cookie-parser": "^1.4.7",
 		"express": "^4.18.2",
 		"playwright": "^1.40.0",
 		"resemblejs": "^4.1.0"

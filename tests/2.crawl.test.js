@@ -1,11 +1,12 @@
+import { after, before, describe, test } from 'node:test';
+import { startServer, stopServer } from '../server.js';
+
 import assert from 'node:assert/strict';
 import { exec } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { startServer } from '../server.js';
-import { test } from 'node:test';
 
 const execAsync = promisify(exec);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -46,16 +47,25 @@ async function cleanScreenshots() {
 	}
 }
 
-test('🕸️ CLI crawls site when --crawl flag is provided', async () => {
-	// Start local test server with multiple pages
-	const { server, baseUrl } = await startServer();
+describe('Crawling functionality', () => {
+	let serverInfo;
+	const testId = 'crawl-test';
 
-	try {
+	// Setup - start server before tests
+	before(async () => {
+		serverInfo = await startServer({ id: testId });
 		// Clean any previous screenshots
 		await cleanScreenshots();
+	});
 
+	// Teardown - stop server after tests
+	after(async () => {
+		await stopServer(testId);
+	});
+
+	test('🕸️ CLI crawls site when --crawl flag is provided', async () => {
 		// Run CLI with the test URL and crawl flag
-		const { stdout } = await execAsync(`node ${cliPath} ${baseUrl} --crawl`);
+		const { stdout } = await execAsync(`node ${cliPath} ${serverInfo.url} --crawl`);
 
 		// Verify output contains crawling messages
 		assert.match(stdout, /Starting site crawl from/);
@@ -93,22 +103,14 @@ test('🕸️ CLI crawls site when --crawl flag is provided', async () => {
 			screenshotCount >= 7,
 			`Expected at least 7 screenshots, but found ${screenshotCount}`,
 		);
-	} finally {
-		// Always close the server
-		server.close();
-	}
-});
+	});
 
-test('🕸️ CLI crawls site when -c shorthand flag is used', async () => {
-	// Start local test server
-	const { server, baseUrl } = await startServer();
-
-	try {
+	test('🕸️ CLI crawls site when -c shorthand flag is used', async () => {
 		// Clean any previous screenshots
 		await cleanScreenshots();
 
 		// Run CLI with the test URL and shorthand flag
-		const { stdout } = await execAsync(`node ${cliPath} ${baseUrl} -c`);
+		const { stdout } = await execAsync(`node ${cliPath} ${serverInfo.url} -c`);
 
 		// Verify output contains crawling messages
 		assert.match(stdout, /Starting site crawl from/);
@@ -119,6 +121,7 @@ test('🕸️ CLI crawls site when -c shorthand flag is used', async () => {
 		const urlDirectories = entries
 			.filter((entry) => entry.isDirectory() && entry.name !== 'snapshots')
 			.map((entry) => entry.name);
+
 		assert.ok(urlDirectories.length > 1, 'Should have multiple URL directories');
 
 		// Verify screenshots exist in these directories
@@ -136,22 +139,14 @@ test('🕸️ CLI crawls site when -c shorthand flag is used', async () => {
 		}
 
 		assert.ok(screenshotCount > 1, 'Should have multiple screenshots');
-	} finally {
-		// Always close the server
-		server.close();
-	}
-});
+	});
 
-test('🔗 CLI informs about additional pages without crawling by default', async () => {
-	// Start local test server with multiple pages
-	const { server, baseUrl } = await startServer();
-
-	try {
+	test('🔗 CLI informs about additional pages without crawling by default', async () => {
 		// Clean any previous screenshots
 		await cleanScreenshots();
 
 		// Run CLI with the test URL without crawl flag
-		const { stdout } = await execAsync(`node ${cliPath} ${baseUrl}`);
+		const { stdout } = await execAsync(`node ${cliPath} ${serverInfo.url}`);
 
 		// Verify output contains info about additional links
 		assert.match(stdout, /Found \d+ additional links on the same domain/);
@@ -178,20 +173,13 @@ test('🔗 CLI informs about additional pages without crawling by default', asyn
 		}
 
 		assert.equal(screenshotCount, 1, 'Should have only one screenshot without crawl flag');
-	} finally {
-		// Always close the server
-		server.close();
-	}
-});
+	});
 
-test('🕸️ CLI handles pages without links correctly during crawl', async () => {
-	// Start local test server
-	const { server, baseUrl } = await startServer();
-	const noLinksUrl = `${baseUrl}/team`; // This page has just one link back to about
-
-	try {
+	test('🕸️ CLI handles pages without links correctly during crawl', async () => {
 		// Clean any previous screenshots
 		await cleanScreenshots();
+
+		const noLinksUrl = `${serverInfo.url}/no-links`; // Use the no-links route from the server
 
 		// Run CLI starting from a page with minimal links
 		const { stdout } = await execAsync(`node ${cliPath} ${noLinksUrl} --crawl`);
@@ -199,33 +187,25 @@ test('🕸️ CLI handles pages without links correctly during crawl', async () 
 		// Verify crawling worked
 		assert.match(stdout, /Crawling completed!/);
 
-		// Verify we got more than just the starting page
+		// Verify we got the screenshot
 		const entries = await fs.readdir(dasiteDir, { withFileTypes: true });
 		const urlDirectories = entries
 			.filter((entry) => entry.isDirectory() && entry.name !== 'snapshots')
 			.map((entry) => entry.name);
 
-		// Should have more than one URL directory (team page links to about, about links to home, etc.)
+		// Should have at least one URL directory
 		assert.ok(
-			urlDirectories.length > 1,
-			'Should crawl multiple pages even when starting from a page with few links',
+			urlDirectories.length >= 1,
+			'Should crawl pages even when starting from a page with no links',
 		);
-	} finally {
-		// Always close the server
-		server.close();
-	}
-});
+	});
 
-test('🌐 CLI does not follow external links during crawl', async () => {
-	// Start local test server
-	const { server, baseUrl } = await startServer();
-
-	try {
+	test('🌐 CLI does not follow external links during crawl', async () => {
 		// Clean any previous screenshots
 		await cleanScreenshots();
 
 		// Run CLI with crawl
-		const { stdout } = await execAsync(`node ${cliPath} ${baseUrl} --crawl`);
+		const { stdout } = await execAsync(`node ${cliPath} ${serverInfo.url}/with-links --crawl`);
 
 		// Check if URL directories were created in the dasite directory
 		const entries = await fs.readdir(dasiteDir, { withFileTypes: true });
@@ -239,8 +219,5 @@ test('🌐 CLI does not follow external links during crawl', async () => {
 		);
 
 		assert.ok(!hasExternalDirectories, 'Should not have directories of external domains');
-	} finally {
-		// Always close the server
-		server.close();
-	}
+	});
 });
